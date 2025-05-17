@@ -1,6 +1,11 @@
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException, Depends, status
 from fastapi.responses import RedirectResponse
 import os
+from supabase import Client as SupabaseClient # Renamed to avoid conflict with pydantic.BaseModel
+from ..core.supabase_client import supabase_client # Use the client we configured
+from ..schemas.auth import UserCreate, UserLogin, Token, UserResponse
+from gotrue.errors import AuthApiError
+from ..dependencies.auth import get_current_user # Import the new dependency
 
 # TODO: Import Supabase client from main app or a shared module
 # from ..main import app as main_app # Example
@@ -60,5 +65,46 @@ async def logout(request: Request):
     # Example with Supabase:
     # await supabase_client.auth.sign_out()
     return {"message": "Logout successful (Not Implemented)"}
+
+@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def signup(user_credentials: UserCreate, client: SupabaseClient = Depends(lambda: supabase_client)):
+    try:
+        response = client.auth.sign_up({
+            "email": user_credentials.email,
+            "password": user_credentials.password,
+        })
+        if response.user and response.user.id:
+            return UserResponse(id=str(response.user.id), email=response.user.email)
+        elif response.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=response.error.message)
+        else:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected error during signup")
+    except AuthApiError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred.")
+
+@router.post("/login", response_model=Token)
+async def login(user_credentials: UserLogin, client: SupabaseClient = Depends(lambda: supabase_client)):
+    try:
+        response = client.auth.sign_in_with_password({
+            "email": user_credentials.email,
+            "password": user_credentials.password
+        })
+        if response.session and response.session.access_token:
+            return Token(access_token=response.session.access_token, token_type="bearer")
+        elif response.error:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=response.error.message or "Invalid credentials")
+        else:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected error during login")
+    except AuthApiError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message or "Invalid credentials")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred.")
+
+@router.get("/users/me", response_model=UserResponse)
+async def read_users_me(current_user: UserResponse = Depends(get_current_user)):
+    """Fetches the current authenticated user's details."""
+    return current_user
 
 # TODO: Add a /me endpoint to get current user status if needed 

@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 
 # TODO: Import routers
-# from .routes import auth, webhook, generate, events
+from .routes import auth #, webhook, generate, events
 # TODO: Import Phoenix for Arize logging if global setup is needed
 # import phoenix as px
 
@@ -17,13 +18,27 @@ app = FastAPI(
     version="0.1.0"
 )
 
+# CORS Middleware Configuration
+origins = [
+    "http://localhost:3000",  # Allow your Next.js frontend
+    # You can add other origins here if needed, e.g., your deployed frontend URL
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True, # Allows cookies to be included in requests
+    allow_methods=["*"],    # Allows all methods (GET, POST, PUT, etc.)
+    allow_headers=["*"],    # Allows all headers
+)
+
 # TODO: Initialize Arize Phoenix if needed globally
 # if os.getenv("ARIZE_ORG_KEY"):
 #     px.launch_app()
 #     print("Phoenix Arize UI running if API key is valid.")
 
 # Mount routers
-# TODO: app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 # TODO: app.include_router(webhook.router, prefix="/webhook", tags=["webhook"])
 # TODO: app.include_router(generate.router, prefix="/generate", tags=["generate"])
 # TODO: app.include_router(events.router, prefix="/events", tags=["events"])
