@@ -1,0 +1,13 @@
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+langgraph==0.0.30
+supabase==2.3.0
+openai==1.14.0
+psycopg2-binary==2.9.9
+arize-phoenix==1.0.0 # Check for the latest version
+python-dotenv==1.0.1
+playwright==1.42.0
+# starlette-websockets is part of starlette/fastapi
+requests==2.31.0
+githubkit==1.0.1
+# hmac is a standard library module 

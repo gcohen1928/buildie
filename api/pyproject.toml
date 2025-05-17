@@ -1,0 +1,41 @@
+[tool.poetry]
+package-mode = false
+name = "buildie-api"
+version = "0.1.0"
+description = "API for Buildie"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.27.1"}
+pydantic = "^2.6.3"
+# LangGraph and related
+langchain = "^0.1.11"
+langgraph = "^0.0.25"
+langchain-openai = "^0.0.8"
+# Supabase
+supabase = "^2.0.2"
+# Arize Phoenix
+arize-phoenix = "^9.5.0"
+# WebSockets
+websockets = "^12.0"
+# For GitHub interactions (alternative to githubkit)
+PyGithub = "^1.59.1" # Or newer
+# For video recording (if controlled from API)
+# playwright = "^1.42.0" # Consider if API directly invokes playwright
+# Other
+python-dotenv = "^1.0.1"
+loguru = "^0.7.2"
+# OpenAPI schema generator for FastAPI
+# fastapi-openapi-parser = "^0.3.1" # Example, or use FastAPI's built-in
+psycopg2-binary = "^2.9.9" # For Supabase if using PostgreSQL directly
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.1"
+ruff = "^0.2.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 
