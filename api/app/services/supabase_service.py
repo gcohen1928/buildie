@@ -70,9 +70,9 @@ async def get_or_create_user(github_user_id: Optional[int] = None, github_userna
     if response.data:
         return response.data[0]
     else:
-        # Handle error, e.g., log response.error
-        print(f"Error creating user: {response.error}")
-        raise Exception(f"Could not create user: {response.error}")
+        err = getattr(response, 'error', 'Unknown error (attribute missing)')
+        print(f"Error creating user: {err}")
+        raise Exception(f"Could not create user: {err}")
 
 
 # --- Project Operations ---
@@ -126,12 +126,13 @@ async def get_or_create_project(
     }
     insert_payload = {k: v for k, v in insert_payload.items() if v is not None}
     
-    response = supabase.table(table).insert(insert_payload).execute()
-    if response.data:
-        return response.data[0]
+    insert_response = supabase.table(table).insert(insert_payload).execute()
+    if insert_response.data:
+        return insert_response.data[0]
     else:
-        print(f"Error creating project: {response.error}")
-        raise Exception(f"Could not create project: {response.error}")
+        err = getattr(insert_response, 'error', 'Unknown error (attribute missing)')
+        print(f"Error creating project: {err}")
+        raise Exception(f"Could not create project: {err}")
 
 # --- Commit Operations ---
 async def store_raw_event_data(event_type: str, delivery_id: str, repo_full_name: str, entity_id: str, payload: Dict[str, Any]):
@@ -207,29 +208,32 @@ async def store_commit_details(
     # Filter out None values for fields that are not explicitly nullable in DB or have defaults
     commit_payload_cleaned = {k: v for k, v in commit_payload.items() if v is not None}
 
-    # Check if commit already exists (unique constraint on project_id, commit_sha)
+    # Check if commit already exists
     select_response = supabase.table("commits").select("id").eq("project_id", project_id).eq("commit_sha", commit_sha).execute()
     
-    commit_id_to_use = None
+    db_operation_response = None # To store response from insert or update
 
     if select_response.data: # Commit exists, update it
         print(f"Commit {commit_sha} already exists for project {project_id}. Updating.")
         commit_id_to_use = select_response.data[0]["id"]
-        # Ensure 'updated_at' is handled by trigger or manually:
-        # commit_payload_cleaned["updated_at"] = "now()" 
-        response = supabase.table("commits").update(commit_payload_cleaned).eq("id", commit_id_to_use).execute()
-    else: # New commit, insert it
-        response = supabase.table("commits").insert(commit_payload_cleaned).execute()
+        db_operation_response = supabase.table("commits").update(commit_payload_cleaned).eq("id", commit_id_to_use).execute()
+    else: # Commit does not exist (or select failed)
+        # Check if the select operation itself had an error
+        select_error = getattr(select_response, 'error', None)
+        if select_error:
+            print(f"Error checking for existing commit: {select_error}")
+            raise Exception(f"Failed to check for existing commit before insert: {select_error}")
+        
+        # If select was successful but found no data, proceed to insert
+        print(f"Commit {commit_sha} does not exist for project {project_id}. Inserting.")
+        db_operation_response = supabase.table("commits").insert(commit_payload_cleaned).execute()
 
-    if response.data:
-        saved_commit = response.data[0]
-        commit_id_to_use = saved_commit["id"] # Get the ID of the inserted/updated commit
+    if db_operation_response and getattr(db_operation_response, 'data', None): # Check if data attribute exists and is not empty
+        saved_commit = db_operation_response.data[0]
+        commit_id_to_use = saved_commit["id"]
 
         if changed_files and commit_id_to_use:
-            # Clear existing files for this commit to handle re-pushes or updates if necessary
-            # Or, more sophisticated logic to update existing file entries might be needed.
-            # For simplicity, we'll delete and re-insert.
-            supabase.table("commit_files").delete().eq("commit_id", commit_id_to_use).execute()
+            supabase.table("commit_files").delete().eq("commit_id", commit_id_to_use).execute() # Assuming delete always "succeeds" or doesn't need error check here for now
             
             files_to_insert = [
                 {"commit_id": commit_id_to_use, "file_path": f["file_path"], "status": f["status"]}
@@ -237,13 +241,23 @@ async def store_commit_details(
             ]
             if files_to_insert:
                 files_response = supabase.table("commit_files").insert(files_to_insert).execute()
-                if files_response.error:
-                    print(f"Error storing commit files: {files_response.error}")
-                    # Potentially raise or handle this error, commit was saved but files weren't.
+                files_error = getattr(files_response, 'error', None)
+                if files_error:
+                    print(f"Error storing commit files: {files_error}")
+                    # Decide on error handling: raise, or just log and return saved_commit?
+                    # For now, just logging.
         return saved_commit
-    else:
-        print(f"Error saving commit: {response.error}")
-        raise Exception(f"Could not save commit: {response.error}")
+    else: # db_operation_response might be None or its data is empty
+        err_detail = "Unknown error or no data returned from database operation."
+        if db_operation_response:
+            err_detail = getattr(db_operation_response, 'error', 'No data returned and error attribute missing.')
+        
+        error_message = f"Error saving commit {commit_sha} to project {project_id}: {err_detail}"
+        print(error_message)
+        # Check the status code if available for more context
+        status_code = getattr(db_operation_response, 'status_code', getattr(db_operation_response, 'status', 'N/A')) # 'status' for postgrest-py
+        print(f"DB operation status code: {status_code}")
+        raise Exception(error_message)
 
 async def get_commit_by_sha(project_id: str, commit_sha: str) -> Optional[Dict[str, Any]]:
     """Retrieves a specific commit by its SHA for a given project."""
