@@ -115,6 +115,22 @@ async def github_webhook(
             print(f"  Timestamp: {commit.timestamp}")
             print(f"  Author: {commit.author.name}")
             print(f"  Modified files: {commit.modified}")
+
+            # The logic for feature completion detection (previously is_feature_complete)
+            # and subsequent call to send_feature_completion_email should now be handled
+            # within the 'process_github_commit_data' function.
+            # 'process_github_commit_data' would use an LLM to determine if a feature
+            # is complete based on commit.message and other relevant data.
+            # If complete, it would then call:
+            #
+            # await send_feature_completion_email(
+            #     project_name=push_event.repository.full_name,
+            #     feature_name="<name_of_completed_feature_from_llm>",
+            #     recipient_email=DESIGNATED_EMAIL_ADDRESS
+            # )
+            #
+            # This keeps the webhook handler cleaner and centralizes the complex processing.
+
             # TODO: M1.4 - Store commit data in Supabase
             # For now, let's store the raw event for later processing or audit
             background_tasks.add_task(store_raw_event_data, x_github_event, x_github_delivery, push_event.repository.full_name, commit.id, raw_payload) # Example call
