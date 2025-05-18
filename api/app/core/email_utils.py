@@ -150,7 +150,6 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
 <body>
   <div class="container">
     <div class="header">
-      <div class="brand-name">Buildie</div>
       <h1>🎉 Feature Complete!</h1>
     </div>
     <div class="content">
