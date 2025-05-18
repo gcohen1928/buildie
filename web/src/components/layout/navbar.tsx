@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -57,27 +58,29 @@ export function Navbar() {
 
   return (
     <motion.nav 
-      className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-4 py-2 bg-slate-900/80 backdrop-blur-md rounded-full shadow-xl w-auto max-w-3xl"
-      whileHover={{ scale: 1.02, y: -2 }}
+      className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-6 py-4 bg-slate-800 backdrop-blur-lg rounded-full shadow-xl w-[calc(100%-3rem)]"
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       {/* Left: Logo */}
-      <Link href="/" className="text-xl font-bold text-white mr-4 whitespace-nowrap">
-        Buildie ✨
+      <Link href="/" className="text-xl font-bold text-white mr-6 whitespace-nowrap flex items-center">
+        <Image src="/buildie.png" alt="Buildie Logo" width={35} height={35} className="mr-2" /> 
+        Buildie
       </Link>
 
       {/* Center: Navigation Links */}
-      <div className="hidden md:flex items-center space-x-1">
+      <div className="hidden md:flex items-center space-x-1 flex-grow justify-center">
         {navItems.map((item) => (
           <Link
             key={item.name}
             href={item.href}
-            className="relative px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors duration-200 rounded-md"
+            className="relative px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors duration-200 rounded-md group" // Added group for group-hover
           >
-            {item.name}
+            <motion.span whileHover={{ y: -2, scale: 1.05 }} className="inline-block">
+              {item.name}
+            </motion.span>
             {pathname === item.href && (
               <motion.div
-                className="absolute inset-0 bg-slate-700/50 rounded-md z-[-1]"
+                className="absolute inset-0 bg-slate-700/80 rounded-md z-[-1]"
                 layoutId="active-pill"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -87,7 +90,7 @@ export function Navbar() {
              {/* Subtle hover background for non-active items */}
             {pathname !== item.href && (
                <motion.div
-                className="absolute inset-0 bg-slate-800/0 group-hover:bg-slate-800/50 rounded-md z-[-1] transition-colors duration-200"
+                className="absolute inset-0 bg-slate-800/0 group-hover:bg-slate-700/60 rounded-md z-[-1] transition-colors duration-200"
                 layoutId={`hover-pill-${item.name}`}
               />
             )}
@@ -96,15 +99,8 @@ export function Navbar() {
       </div>
 
       {/* Right: User Profile & CTA */}
-      <div className="flex items-center space-x-3 ml-4">
-        <Link href="/projects/new" passHref legacyBehavior>
-          <Button asChild variant="default" size="sm" className="bg-sky-600 hover:bg-sky-700 text-white whitespace-nowrap">
-            <div>
-              <Plus className="w-4 h-4 mr-1.5" />
-              New Project
-            </div>
-          </Button>
-        </Link>
+      <div className="flex items-center space-x-3 ml-6">
+        {/* New Project Button Removed */}
         {isLoading ? (
           <div className="h-8 w-8 bg-slate-700 rounded-full animate-pulse" /> // Simple skeleton loader for avatar area
         ) : authUser ? (
@@ -146,12 +142,12 @@ export function Navbar() {
         ) : (
           <>
             <Link href="/login" passHref legacyBehavior>
-              <Button variant="outline" size="sm" className="text-slate-300 hover:text-white hover:bg-slate-700/50 border-slate-600">
+              <Button variant="default" size="sm" className="bg-slate-700 text-slate-300 hover:bg-slate-600 px-2.5 py-1 text-xs rounded-md font-medium">
                 Login
               </Button>
             </Link>
             <Link href="/signup" passHref legacyBehavior>
-              <Button variant="default" size="sm" className="bg-sky-600 hover:bg-sky-700 text-white">
+              <Button variant="default" size="sm" className="bg-sky-600 hover:bg-sky-700 text-white px-2.5 py-1 text-xs rounded-md font-medium">
                 Sign Up
               </Button>
             </Link>

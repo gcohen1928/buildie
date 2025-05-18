@@ -84,9 +84,9 @@ export function NewProjectForm() {
       }
       const result = await response.json() as ProjectApiResponse;
       toast.success("Project Created!", {
-        description: `Successfully created project: ${result.name}. Indexing repository...`,
+        description: `Successfully created project: ${result.name}. Preparing your dashboard...`,
       });
-      router.push(`/dashboard?projectId=${result.id}`);
+      router.push(`/dashboard?projectId=${result.id}&isIndexing=true`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
       toast.error("Error Creating Project", { description: errorMessage });

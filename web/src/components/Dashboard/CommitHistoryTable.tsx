@@ -15,9 +15,11 @@ export interface Commit {
 
 interface CommitHistoryTableProps {
   commits: Commit[];
+  selectedCommitShas: string[];
+  onCommitSelect: (commitSha: string) => void;
 }
 
-export default function CommitHistoryTable({ commits }: CommitHistoryTableProps) {
+export default function CommitHistoryTable({ commits, selectedCommitShas, onCommitSelect }: CommitHistoryTableProps) {
   if (!commits || commits.length === 0) {
     return <p className="text-muted-foreground text-center py-10">No commit history available.</p>;
   }
@@ -34,6 +36,8 @@ export default function CommitHistoryTable({ commits }: CommitHistoryTableProps)
           <CommitRow 
             key={commit.id} 
             commit={commit} 
+            isSelected={selectedCommitShas.includes(commit.sha)}
+            onSelect={() => onCommitSelect(commit.sha)}
           />
         ))}
       </div>
