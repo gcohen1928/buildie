@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Plus, LogOut, UserCircle, SettingsIcon } from "lucide-react"; // Added LogOut, UserCircle, SettingsIcon
+import { Plus, LogOut, UserCircle } from "lucide-react"; // Added LogOut, UserCircle
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -21,7 +21,6 @@ const navItems = [
   { name: "Dashboard", href: "/dashboard" },
   { name: "Projects", href: "/projects" },
   { name: "Analytics", href: "/analytics" },
-  { name: "Settings", href: "/settings" },
 ];
 
 // Placeholder user data - replace with actual data fetching logic
@@ -125,11 +124,6 @@ export function Navbar() {
                 <UserCircle className="mr-2 h-4 w-4" />
                 <span>Profile</span>
                 {/* <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut> */}
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <SettingsIcon className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-                {/* <DropdownMenuShortcut>⌘S</DropdownMenuShortcut> */}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={async () => await logout()}>

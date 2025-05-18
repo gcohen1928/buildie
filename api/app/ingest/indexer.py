@@ -3,10 +3,10 @@ import tempfile
 import shutil
 import git  # gitpython
 import ast
-import openai
+from openai import OpenAI
 import numpy as np
 import logging  # Add explicit logging import
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 from supabase import create_client, Client # Added Supabase
 from urllib.parse import urlparse # Added for URL parsing
 from postgrest.exceptions import APIError  # Added for handling APIError
@@ -79,7 +79,9 @@ class RepoIndexer:
     def __init__(self, embedding_model="text-embedding-ada-002", openai_api_key=None, supabase_url=None, supabase_key=None, supabase_table_name=None):
         self.embedding_model = embedding_model
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        openai.api_key = self.openai_api_key
+
+        # Instantiate modern OpenAI client (>=1.0)
+        self._oai_client = OpenAI(api_key=self.openai_api_key)
 
         _supabase_url = supabase_url or os.getenv("SUPABASE_URL")
         _supabase_key = supabase_key or os.getenv("SUPABASE_KEY")
@@ -581,7 +583,7 @@ class RepoIndexer:
             if openai_batch_texts and (openai_batch_token_count + current_tokens > MAX_TOKENS_PER_BATCH or len(openai_batch_texts) >= 20):
                 print(f"    OpenAI batch full ({len(openai_batch_texts)} texts, {openai_batch_token_count} tokens). Sending to OpenAI...")
                 try:
-                    resp = openai.embeddings.create(input=openai_batch_texts, model=self.embedding_model)
+                    resp = self._oai_client.embeddings.create(input=openai_batch_texts, model=self.embedding_model)
                     print(f"      Received {len(resp.data)} embeddings from OpenAI.")
                     
                     records_for_supabase_batch = []
@@ -638,7 +640,7 @@ class RepoIndexer:
         if openai_batch_texts:
             print(f"    Processing final OpenAI batch ({len(openai_batch_texts)} texts, {openai_batch_token_count} tokens). Sending to OpenAI...")
             try:
-                resp = openai.embeddings.create(input=openai_batch_texts, model=self.embedding_model)
+                resp = self._oai_client.embeddings.create(input=openai_batch_texts, model=self.embedding_model)
                 print(f"      Received {len(resp.data)} embeddings from OpenAI for final batch.")
                 records_for_supabase_batch = []
                 for j, emb_data in enumerate(resp.data):
@@ -680,6 +682,271 @@ class RepoIndexer:
                 total_failed_count += len(openai_batch_texts)
 
         return total_inserted_count, total_failed_count
+
+    def _to_pgvector_literal(self, embedding: List[float]) -> str:
+        """Convert a list of floats to a PostgreSQL vector literal used by pgvector."""
+        # Round floats to 6 decimals to reduce payload size
+        rounded = [round(float(x), 6) for x in embedding]
+        return "[" + ",".join(map(str, rounded)) + "]"
+
+    def search_code(
+        self,
+        query: str,
+        project_id: Optional[int] = None,
+        limit: int = 10,
+        similarity_threshold: float = 0.5,
+        max_server_rows: int = 2500,
+    ) -> List[Dict[str, Any]]:
+        """Semantic code search that *always* works, even if PostgREST cannot order by
+        pgvector operators.
+
+        Strategy
+        ---------
+        1. Embed the natural-language *query* with OpenAI.
+        2. Pull a bounded set of candidate rows from Supabase which **includes the raw
+           embedding** column (up to ``max_server_rows``).
+        3. Compute cosine similarity (1 ‑ cosine distance) in Python/NumPy – this is
+           lightweight for a few thousand vectors and completely sidesteps any quirks
+           of the PostgREST URL grammar.
+        4. Return the top-``limit`` matches (optionally filtered by
+           ``similarity_threshold``).
+
+        Parameters
+        ----------
+        query: str
+            Natural language description or code fragment to search for.
+        project_id: int | None
+            If supplied, the search is scoped to this single project; otherwise it runs
+            across *all* projects (this can be slower).
+        limit: int
+            Maximum number of results to return.
+        similarity_threshold: float
+            Minimum cosine-similarity required (0-1).  Results below this value are
+            discarded *after* ranking.
+        max_server_rows: int
+            Hard cap on how many rows we pull from Supabase for local ranking. The
+            default (~2.5k) keeps memory usage modest (<50 MB) while being plenty for
+            typical repos.  Increase if you store far more than that per project and
+            need higher recall.
+        """
+
+        try:
+            # 1) Embed the query text -----------------------------------------
+            emb_resp = self._oai_client.embeddings.create(input=query, model=self.embedding_model)
+            query_vec = np.asarray(emb_resp.data[0].embedding, dtype=np.float32)
+
+            # 2) Download candidate rows from Supabase ------------------------
+            select_cols = (
+                "content,file_path,symbol_type,symbol_name,start_line,end_line,"
+                "project_id,embedding"
+            )
+
+            qb = self.supabase.table(self.supabase_table_name).select(select_cols)
+            if project_id is not None:
+                qb = qb.eq("project_id", project_id)
+
+            # NOTE: we purposefully *don't* supply any ordering here because the
+            # pgvector operators can't be used inside PostgREST `order=`.
+            qb = qb.limit(max_server_rows)
+
+            resp = qb.execute()
+            if getattr(resp, "error", None):
+                print(f"Error selecting candidate embeddings: {resp.error}")
+                return []
+
+            candidates: List[Dict[str, Any]] = getattr(resp, "data", []) or []
+            if not candidates:
+                print("No candidate chunks found for given constraints – returning empty list")
+                return []
+
+            # 3) Local similarity computation ---------------------------------
+            # pgvector columns come back from PostgREST as TEXT, e.g.
+            # "[-0.123,0.456,…]".  We have to turn that string into a list[float]
+            # before feeding it to NumPy.
+            parsed_embeddings: List[List[float]] = []
+            still_string = 0
+            import json, ast as _ast  # local import to avoid a global dependency
+            for row in candidates:
+                embedding_val = row.get("embedding")
+                if isinstance(embedding_val, str):
+                    still_string += 1
+                    try:
+                        # First try JSON – quickest for standard list syntax
+                        embedding_list = json.loads(embedding_val)
+                    except json.JSONDecodeError:
+                        # Fallback: ast.literal_eval handles single quotes etc.
+                        embedding_list = _ast.literal_eval(embedding_val)
+                    row["embedding"] = embedding_list
+                elif embedding_val is None:
+                    # Skip rows without an embedding (shouldn't happen)
+                    continue
+                parsed_embeddings.append(row["embedding"])
+
+            if still_string:
+                print(f"Parsed {still_string} embeddings that PostgREST returned as strings → lists[float]")
+
+            # Build an array of shape (N, D)
+            emb_matrix = np.asarray(parsed_embeddings, dtype=np.float32)
+
+            # Cosine similarity: dot(u, v) / (||u|| ||v||)
+            # We normalise query_vec once; emb_matrix can be normalised row-wise.
+            query_norm = np.linalg.norm(query_vec)
+            if query_norm == 0:
+                print("Query vector has zero norm – aborting search")
+                return []
+
+            # Compute norms for each candidate (shape (N,))
+            cand_norms = np.linalg.norm(emb_matrix, axis=1)
+            # Avoid division by zero – mask zeros to very small number
+            cand_norms[cand_norms == 0] = 1e-8
+
+            # Dot products (shape (N,))
+            dots = emb_matrix.dot(query_vec)
+            sims = dots / (cand_norms * query_norm)
+
+            # Attach similarity to candidate rows
+            for row, sim in zip(candidates, sims):
+                row["similarity"] = float(sim)
+
+            # 4) Rank, threshold, limit --------------------------------------
+            ranked = [r for r in sorted(candidates, key=lambda x: x["similarity"], reverse=True)
+                       if r["similarity"] >= similarity_threshold]
+
+            top = ranked[:limit]
+            print(f"Search retrieved {len(candidates)} candidates → {len(top)} top matches (≥{similarity_threshold})")
+            return top
+
+        except Exception as e:
+            print(f"Error during code search: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def find_project_id(self, search_term: str) -> Optional[int]:
+        """Find project id by fuzzy matching against name / full_name / html_url without RPC."""
+        try:
+            # Build or_ filter using PostgREST syntax
+            pattern = f"%{search_term}%"
+            resp = (
+                self.supabase.table("projects")
+                .select("id, name, full_name, html_url")
+                .or_(
+                    f"name.ilike.{pattern},full_name.ilike.{pattern},html_url.ilike.{pattern}"
+                )
+                .limit(5)
+                .execute()
+            )
+            if hasattr(resp, "error") and resp.error:
+                print(f"Error querying projects: {resp.error}")
+                return None
+            rows = getattr(resp, "data", [])
+            if rows:
+                best = rows[0]
+                print(f"Matched project: {best['full_name']} (ID {best['id']})")
+                return best["id"]
+            return None
+        except Exception as e:
+            print(f"Error finding project id: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def search_code_with_context(self, feature_summary: str, commit_message: str, diff_content: str = None, 
+                               repo_name: str = None, project_id: Optional[int] = None,
+                               limit: int = 10, similarity_threshold: float = 0.5) -> List[Dict[str, Any]]:
+        """
+        Search for code using a combination of feature summary, commit message, and diff content.
+        
+        This method constructs an optimized search query from the given inputs and then performs
+        a semantic search over the codebase.
+        
+        Args:
+            feature_summary: Summary of the feature changes
+            commit_message: Git commit message
+            diff_content: Optional content of the git diff
+            repo_name: Optional repository name or URL to search in
+            project_id: Optional specific project ID to search within
+            limit: Maximum number of results to return
+            similarity_threshold: Minimum similarity threshold
+            
+        Returns:
+            List of code fragments matching the query
+        """
+        try:
+            # If repo_name is provided but not project_id, try to find the project_id
+            if repo_name and project_id is None:
+                project_id = self.find_project_id(repo_name)
+                if project_id:
+                    print(f"Found project ID {project_id} for repository: {repo_name}")
+                else:
+                    print(f"Warning: Could not find project ID for repository: {repo_name}")
+            
+            # Extract file names and important keywords from the diff
+            extracted_keywords = []
+            extracted_files = []
+            
+            if diff_content:
+                # Try to extract file names
+                import re
+                file_matches = re.findall(r'diff --git a/(.*?) b/(.*?)\n', diff_content)
+                for match in file_matches:
+                    file_name = match[1]  # Use the "b" file (new version)
+                    extracted_files.append(file_name)
+                    # Extract the base name without extension as a keyword
+                    base_name = os.path.basename(file_name)
+                    base_without_ext = os.path.splitext(base_name)[0]
+                    if base_without_ext:
+                        extracted_keywords.append(base_without_ext)
+                
+                # Extract added code lines (prefixed with +)
+                added_lines = re.findall(r'^\+(?!\+\+)(.*)$', diff_content, re.MULTILINE)
+                for line in added_lines:
+                    # Skip empty lines and purely syntactic lines
+                    stripped = line.strip()
+                    if stripped and not stripped.startswith('import ') and not stripped in ['{', '}', ');', '});']:
+                        # Extract potential keywords/identifiers
+                        code_words = re.findall(r'\b[a-zA-Z][a-zA-Z0-9]*\b', stripped)
+                        for word in code_words:
+                            if len(word) > 3 and word not in ['const', 'function', 'return', 'await', 'async']:
+                                extracted_keywords.append(word)
+            
+            # Build the optimized query
+            query_parts = []
+            
+            # Feature summary gets highest priority
+            if feature_summary:
+                query_parts.append(feature_summary)
+            
+            # Add commit message next
+            if commit_message:
+                query_parts.append(commit_message)
+            
+            # Add extracted files and important keywords
+            if extracted_files:
+                query_parts.append(" ".join(extracted_files[:3]))  # Limit to 3 files
+            
+            if extracted_keywords:
+                # Remove duplicates and limit keywords
+                unique_keywords = list(set(extracted_keywords))
+                query_parts.append(" ".join(unique_keywords[:10]))  # Limit to 10 keywords
+            
+            # Build the final query
+            optimized_query = " ".join(query_parts)
+            print(f"Optimized search query: '{optimized_query}'")
+            
+            # Perform the search
+            return self.search_code(
+                query=optimized_query, 
+                project_id=project_id,
+                limit=limit,
+                similarity_threshold=similarity_threshold
+            )
+            
+        except Exception as e:
+            print(f"Error in search_code_with_context: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
     # Note: The search functionality (if you had one using FAISS) would also need to be rewritten
     # to query Supabase using its vector search capabilities (e.g., using a stored procedure/function). 

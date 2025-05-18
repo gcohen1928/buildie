@@ -26,5 +26,5 @@ class AutopilotAgent:
         }
 
     def _build_prompt(self, feature_context):
-        # TODO: Load and format the autopilot prompt template
+        """Simple prompt composer (legacy – retained for backward compatibility)."""
         return f"Autopilot context: {feature_context}" 

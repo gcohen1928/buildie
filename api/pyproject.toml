@@ -12,9 +12,9 @@ fastapi = "^0.110.0"
 uvicorn = {extras = ["standard"], version = "^0.27.1"}
 pydantic = "^2.6.3"
 # LangGraph and related
-langchain = "^0.1.11"
-langgraph = "^0.0.25"
-langchain-openai = "^0.0.8"
+langchain = "^0.3.0"
+langgraph = "^0.2.20"
+langchain-openai = "^0.3.0"
 # Supabase
 supabase = "^2.0.2"
 # Arize Phoenix
@@ -24,7 +24,9 @@ websockets = "^12.0"
 # For GitHub interactions (alternative to githubkit)
 PyGithub = "^1.59.1" # Or newer
 # For video recording (if controlled from API)
-# playwright = "^1.42.0" # Consider if API directly invokes playwright
+playwright = "^1.42.0"
+# Browser automation for the demo generation agent
+browser-use = "^0.1.0"
 # Other
 python-dotenv = "^1.0.1"
 loguru = "^0.7.2"
@@ -35,10 +37,17 @@ gitpython = "^3.1.44"
 openai = "^1.79.0"
 faiss-cpu = "^1.11.0"
 tiktoken = "^0.9.0"
+# Needed by browser-use (imports ChatAnthropic)
+langchain-anthropic = "^0.3.0"
 numpy = "<2"
 httpx = "^0.28.1"
 emails = "^0.6"
 tweepy = "^4.15.0"
+# Required by browser-use (HTML extraction helper)
+maincontentextractor = "^0.0.4"
+selenium-screenshot = ">=2.1,<4"
+selenium = ">=4"
+webdriver-manager = "^4.0.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.1"
