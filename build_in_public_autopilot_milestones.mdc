@@ -1,0 +1,158 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Build-in-Public Autopilot: Project Plan & Milestones
+
+This document outlines the development plan and key milestones for the "Build-in-Public Autopilot" monorepo project. The goal is to create a system that automates aspects of the build-in-public process by leveraging GitHub webhooks, LLM agents, and various modern development tools. **The new demo flow involves a live commit triggering an email for a completed feature. The email links to an event stream (chat-like UI) showing the agent at work, which then outputs an editable, Twitter-like UI for a tweet thread, including potential videos. Users can edit, re-trigger the agent with prompts, or post directly.**
+
+## Key Technologies
+
+*   **Backend:** FastAPI ([api/README.md](mdc:api/README.md))
+*   **Frontend:** Next.js
+*   **LLM Orchestration:** LangGraph
+*   **Browser Automation/Recording (for feature videos):** Playwright
+*   **Database & Auth:** Supabase
+*   **LLM Observability:** Arize Phoenix
+*   **Containerization:** Docker
+*   **Deployment:** Vercel (Frontend), Fly.io (Backend)
+*   **Email Notifications:** (e.g., SendGrid, Resend - TBD)
+
+## Development Milestones
+
+### Phase 1: Core Backend (FastAPI) - In Progress
+
+*   **M1.1: Initial API Scaffolding (✅ Done)**
+    *   Basic FastAPI app structure created in `api/`.
+    *   Placeholder routes for auth, webhooks, generation, and events.
+    *   Initial module structure for agents, ingest, video, and publish.
+    *   Setup `pyproject.toml` for dependency management.
+    *   Basic `Dockerfile` for the API.
+    *   Refer to [api/README.md](mdc:api/README.md) for API setup and details.
+
+*   **M1.2: GitHub Webhook Ingestion & Feature Completion Detection**
+    *   Implement logic in `api/app/routes/webhook.py` to securely receive, validate, and process GitHub webhooks (e.g., push events, commit details).
+    *   **NEW:** Develop logic to determine if a commit/push signifies a "completed feature" to trigger the flow.
+    *   Store relevant webhook data.
+
+*   **M1.3: Diff Processing & Code Analysis**
+    *   Develop `api/app/ingest/diff_splitter.py` to parse code diffs from commit data.
+    *   Extract meaningful changes and context for the LLM agent.
+
+*   **M1.4: Supabase Integration - Core**
+    *   Set up Supabase project (DB, Auth).
+    *   Define initial database schemas using SQLModel/Pydantic in `api/app/models/` for users, projects, ingested data (commits, diffs), generated content (tweet threads, video links), and agent event logs.
+    *   Implement core service logic in `api/app/services/` for interacting with Supabase.
+    *   Integrate Supabase Auth for API endpoint protection in `api/app/routes/auth.py` and `api/app/dependencies/`.
+
+*   **M1.5: LangGraph Agent - Core Content & Video Generation**
+    *   Design and implement the LangGraph agent in `api/app/agents/build_graph.py` and `api/app/agents/graph_runner.py`.
+    *   **Focus:**
+        *   Take processed diffs/commit information.
+        *   Generate content for a tweet thread (multiple parts).
+        *   **NEW:** Orchestrate Playwright (`api/app/video/recorder.py`) to generate short videos showcasing features based on commit details.
+        *   **NEW:** Structure output for a chat-like event stream and for the final editable tweet thread UI.
+        *   **NEW:** Accept user prompts/edits for regeneration cycles.
+    *   Integrate with an LLM provider (e.g., OpenAI).
+
+*   **M1.6: Arize Phoenix Logging**
+    *   Implement `api/app/publish/arize_logger.py` to log LLM prompts, responses, and agent traces to Arize Phoenix for observability.
+
+*   **M1.7: API Endpoints for Agent Interaction & Event Streaming**
+    *   Develop `api/app/routes/generate.py` to allow triggering the LangGraph agent.
+    *   **NEW:** Endpoints to fetch agent progress/event stream for the chat-like UI.
+    *   **NEW:** Endpoints to submit user edits and re-trigger agent processing.
+    *   Define schemas in `api/app/schemas/` for request/response validation.
+
+*   **M1.8: Email Notification Service (NEW)**
+    *   Implement a service (e.g., `api/app/services/email_service.py`) to send email notifications.
+    *   Trigger email when a feature is detected as complete, containing a link to the agent event stream/results page.
+
+### Phase 2: Frontend (Next.js) & User Interface - Focus on Demo Flow
+
+*   **M2.1: Next.js Project Setup (`web/`)**
+    *   Initialize/Continue Next.js application within `web/`.
+    *   Establish basic project structure: pages, components, services, styles.
+    *   Integrate Supabase client library for authentication and data fetching.
+
+*   **M2.2: User Authentication UI**
+    *   Implement frontend components and pages for user registration, login, and logout using Supabase Auth.
+    *   Manage user sessions.
+
+*   **M2.3: Agent Event Stream & Content Editor UI (NEW - Replaces old M2.3)**
+    *   **NEW:** Create UI view (`web/src/app/dashboard` or similar) for signed-in users.
+    *   **NEW:** Implement a chat-like UI to display the agent's event stream in real-time (using WebSockets - M3.2).
+    *   **NEW:** Develop a Twitter-like UI to display the generated tweet thread.
+        *   Each tweet in the thread should be an editable text box.
+        *   Display generated videos alongside relevant tweets.
+    *   **NEW:** Allow users to edit the tweet content directly.
+    *   **NEW:** Implement a button/form to submit "edit prompts" to the agent for regeneration.
+    *   **NEW:** Implement a "Post" button to trigger publishing (integrates with M3.4).
+
+*   **M2.4: API Interaction Layer**
+    *   Implement services/hooks in Next.js to communicate with the FastAPI backend for:
+        *   Fetching agent event stream data.
+        *   Fetching generated tweet threads and videos.
+        *   Submitting user edits and regeneration prompts.
+        *   Triggering the final "Post" action.
+
+### Phase 3: Advanced Features & Integrations
+
+*   **M3.1: Playwright Video Recording & Integration**
+    *   Set up a `playwright_runner/` service or ensure `api/app/video/recorder.py` is robust.
+    *   Agent (M1.5) triggers Playwright to record screens/browser sessions based on commit content to demonstrate features.
+    *   Ensure videos are stored (e.g., Supabase Storage) and linked in the generated content.
+
+*   **M3.2: Real-time Updates with WebSockets**
+    *   Fully implement WebSocket functionality in `api/app/routes/events.py`.
+    *   Connect Next.js frontend (M2.3) to receive real-time agent event stream updates.
+
+*   **M3.3: Advanced LangGraph Agent Capabilities**
+    *   Refine LangGraph agent: improve prompts, handle complex reasoning, improve video generation cues.
+    *   Effectively incorporate user edits and prompts for iterative content refinement.
+    *   Implement embedding generation and vector search (`api/app/ingest/embeddings.py`) for RAG if needed for more context-aware generation.
+    *   Develop `api/app/ingest/manual_ingest_tool.py` for ad-hoc data input to the agent if required.
+
+*   **M3.4: Content Publishing & Social Integration**
+    *   Expand `api/app/publish/social_mocks.py` into actual integrations with platforms like Twitter.
+    *   The "Post" button in the UI (M2.3) triggers this service.
+    *   Ensure users can review and approve content (implicitly done through the edit/post flow).
+
+### Phase 4: Infrastructure, Deployment & DX
+
+*   **M4.1: Dockerization & Orchestration**
+    *   Finalize `api/Dockerfile` for production.
+    *   Create a `web/Dockerfile` for the Next.js application.
+    *   Develop a `docker-compose.yml` at the monorepo root for easy local multi-service development.
+    *   Update/Create `Makefile` at the root for common development tasks.
+
+*   **M4.2: Supabase Migrations & Database Management**
+    *   Establish a robust workflow for Supabase database schema migrations.
+    *   Ensure data integrity and version control for the database schema.
+
+*   **M4.3: Deployment Strategy**
+    *   Deploy FastAPI backend to Fly.io (or similar PaaS).
+    *   Deploy Next.js frontend to Vercel.
+    *   Set up CI/CD pipelines (e.g., GitHub Actions) for automated testing and deployment.
+
+*   **M4.4: Environment Variable Management**
+    *   Maintain a clear `env.example.txt` (or similar, e.g., `env.example` if not for tool limitations) in the root directory.
+    *   Ensure secure and consistent handling of environment variables across local, staging, and production environments.
+
+### Phase 5: Testing, Refinement & Iteration
+
+*   **M5.1: Comprehensive Testing**
+    *   Write unit tests (e.g., with Pytest for FastAPI, Jest/React Testing Library for Next.js).
+    *   Implement integration tests for API endpoints, agent flows, and service interactions.
+    *   Develop end-to-end tests (e.g., using Playwright or Cypress) covering the new demo flow.
+
+*   **M5.2: Monitoring & Observability**
+    *   Ensure Arize Phoenix is effectively capturing all necessary LLM interaction data, including edit cycles.
+    *   Set up basic application monitoring for both backend and frontend services.
+
+*   **M5.3: User Feedback & Iterative Improvement**
+    *   Actively seek user feedback if the project is used by others.
+    *   Iterate on features, usability, and agent performance based on real-world use and feedback.
+
+This project plan provides a structured approach to building the "Build-in-Public Autopilot." Milestones and priorities may be adjusted as the project evolves.
