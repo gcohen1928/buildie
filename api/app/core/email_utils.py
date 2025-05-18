@@ -6,7 +6,7 @@ from typing import Optional # Added Optional just in case, though not strictly u
 
 # Application Configuration relevant to emails
 DESIGNATED_EMAIL_ADDRESS = os.getenv("FEATURE_COMPLETE_EMAIL_RECIPIENT", "your_email@example.com")
-YOUR_APP_BASE_URL = os.getenv("APP_BASE_URL", "https://your-app-domain.com")
+YOUR_APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:3000s")
 
 # SMTP Configuration from environment variables
 EMAIL_SMTP_HOST = os.getenv("EMAIL_SMTP_HOST", "smtp.example.com")
