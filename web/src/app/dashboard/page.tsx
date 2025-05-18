@@ -1452,6 +1452,7 @@ export default function DashboardPage() {
             {!isLoadingProject && !project && !projectError && !projectId && (
                  <h1 className="text-4xl md:text-5xl font-bold text-slate-50 mb-3">
                     Welcome to Buildie! 
+                    
                  </h1>
             )}
             {!isLoadingProject && projectError && (
