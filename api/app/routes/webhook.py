@@ -6,9 +6,9 @@ import hashlib
 import os
 
 # TODO: Import ingest functions
-# from ..ingest.diff_processor import process_github_push
+from ..ingest.diff_processor import process_github_commit_data
 # TODO: Import Supabase client/service
-# from ..services.supabase_service import store_commit_data 
+from ..services.supabase_service import store_raw_event_data
 
 router = APIRouter()
 
@@ -116,12 +116,18 @@ async def github_webhook(
             print(f"  Author: {commit.author.name}")
             print(f"  Modified files: {commit.modified}")
             # TODO: M1.4 - Store commit data in Supabase
-            # background_tasks.add_task(store_commit_data, commit, push_event.repository)
+            # For now, let's store the raw event for later processing or audit
+            background_tasks.add_task(store_raw_event_data, x_github_event, x_github_delivery, push_event.repository.full_name, commit.id, raw_payload) # Example call
             
             # TODO: M1.3 - Trigger diff processing for this commit
-            # For example, you might want to get the diff URL or pass commit details
-            # diff_url = f"{push_event.repository.html_url}/commit/{commit.id}.diff"
-            # background_tasks.add_task(process_github_push, commit_id=commit.id, diff_url=diff_url, ...)
+            # This function would handle fetching diff, LLM calls, and structured data storage
+            background_tasks.add_task(
+                process_github_commit_data,
+                commit_payload=commit.model_dump(), # Pass serializable data
+                repository_payload=push_event.repository.model_dump(),
+                compare_url=str(push_event.compare), # Pass the compare URL
+                pusher_payload=push_event.pusher.model_dump()
+            )
             
         print(f"Finished initial processing of push event for {repo_name}")
         return {"message": f"Push event for {repo_name} received and processing started for {num_commits} commit(s)"}
