@@ -1,4 +1,9 @@
+import asyncio
 import os
+# Adjust the import path if your test_indexer.py is not in api/app/ingest/
+# If test_indexer.py is in the project root (alongside the 'api' folder), use:
+# from api.app.ingest.indexer import RepoIndexer
+# If it's in api/app/ingest/, use:
 from indexer import RepoIndexer
 
 # Load OpenAI API key from .env if not already set
@@ -8,19 +13,23 @@ def load_env():
     if not os.getenv('OPENAI_API_KEY'):
         raise RuntimeError('OPENAI_API_KEY not set in environment or .env')
 
-if __name__ == "__main__":
+async def main():
     load_env()
-    repo_url = "https://github.com/Srachuri-code/H2HApp"  # Your repo
     indexer = RepoIndexer()
-    print(f"Indexing repo: {repo_url}")
-    success = indexer.index_repo(repo_url)
+
+    # test_repo_url = "https://github.com/Srachuri-code/H2HApp" 
+    test_repo_url = "https://github.com/psf/requests-html" # Using a different small repo for variety
+    print(f"Indexing repo: {test_repo_url}")
+    
+    success = indexer.index_repo(test_repo_url)
+
     if success:
-        print("Indexing complete!")
-        print(f"Number of chunks indexed: {len(indexer.metadata)}")
-        if indexer.metadata:
-            print("Sample chunk metadata:")
-            print(indexer.metadata[0])
-        print(f"FAISS index file exists: {os.path.exists(indexer.vector_db_path)}")
-        print(f"Metadata file exists: {os.path.exists(indexer.vector_db_path + '.meta')}")
+        print(f"Repo indexing process completed for {test_repo_url}.")
+        print("Check your local Supabase 'code_embeddings' table for data and logs for details.")
+        # The line below caused AttributeError and has been removed:
+        # print(f"Number of chunks indexed: {len(indexer.metadata)}") 
     else:
-        print("Indexing failed.") 
+        print(f"Failed to index {test_repo_url}.")
+
+if __name__ == "__main__":
+    asyncio.run(main()) 

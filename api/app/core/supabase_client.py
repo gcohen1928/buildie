@@ -13,13 +13,13 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY: str = os.environ.get("SUPABASE_ANON_KEY") # Using ANON_KEY for client-like operations from backend
+SUPABASE_KEY: str = os.environ.get("SUPABASE_KEY") # Using ANON_KEY for client-like operations from backend
 # SUPABASE_SERVICE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") # For admin operations
 
 if not SUPABASE_URL:
     raise ValueError("SUPABASE_URL environment variable not found.")
 if not SUPABASE_KEY:
-    raise ValueError("SUPABASE_ANON_KEY environment variable not found.")
+    raise ValueError("SUPABASE_KEY environment variable not found.")
 
 supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
