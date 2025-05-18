@@ -25,7 +25,7 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     
     safe_feature_name = feature_name.replace(" ", "%20").replace("&", "%26").replace("?", "%3F")
     safe_project_name = project_name.replace(" ", "%20").replace("/", "%2F")
-    post_generation_link = f"{YOUR_APP_BASE_URL}/generate-post?project={safe_project_name}&feature={safe_feature_name}"
+    post_generation_link = f"{YOUR_APP_BASE_URL}/dashboard?projectId={safe_project_name}&feature={safe_feature_name}"
     
     # Define potentially problematic CSS properties as separate strings to avoid f-string parsing issues
     header_brand_name_font_size = "font-size: 20px; /* Slightly smaller */"
