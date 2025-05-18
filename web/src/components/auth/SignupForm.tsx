@@ -77,9 +77,9 @@ const SignupForm: React.FC = () => {
       <Card>
         <CardHeader className="space-y-1 text-center">
           <UserPlus className="mx-auto h-12 w-12 text-primary" /> {/* Use theme color */}
-          <CardTitle className="text-3xl font-bold">Create your Account</CardTitle>
+          <CardTitle className="text-3xl font-bold">Create Your Buildie Account</CardTitle>
           <CardDescription>
-            Get started with Build-in-Public Autopilot.
+            Start building in public, on autopilot.
           </CardDescription>
         </CardHeader>
         <CardContent>

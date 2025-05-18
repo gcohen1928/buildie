@@ -49,9 +49,9 @@ const LoginForm: React.FC = () => {
     >
       <Card>
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-bold">Welcome Back</CardTitle>
+          <CardTitle className="text-3xl font-bold">Welcome Back to Buildie</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            Log in to continue building in public, on autopilot.
           </CardDescription>
         </CardHeader>
         <CardContent>
