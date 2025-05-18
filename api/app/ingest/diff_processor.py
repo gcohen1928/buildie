@@ -206,45 +206,62 @@ async def process_github_commit_data(
             changed_files=changed_files_data
         )
         print(f"Successfully processed and stored commit {commit_payload['id']}")
+    except Exception as e:
+        print(f"Error during Supabase store_commit_details for {commit_payload['id']}: {e}")
+        # Optionally, re-raise or handle more gracefully depending on desired behavior
+        raise # Re-raise the exception to halt further processing for this commit if storing fails
 
-        # After successfully storing commit, check for feature completion
-        # and send email if applicable.
+    # After successfully storing commit, check for feature completion
+    # and send email if applicable.
+    completed_feature_name = None
+    project_full_name = repository_payload.get("full_name", "Unknown Project")
+    try:
         commit_message = commit_payload.get("message", "")
         completed_feature_name = await determine_feature_completion_and_name_llm(commit_message, diff_text)
 
         # TEMPORARY: Always attempt to send email for testing, using a default feature name if LLM doesn't provide one.
         # REMOVE/REVERT this block for production to only send emails for actual completed features.
-        project_full_name = repository_payload.get("full_name", "Unknown Project")
         if not completed_feature_name:
             commit_id_short = commit_payload.get('id', 'unknown_commit')[:7]
             completed_feature_name = f"Test Feature (from commit {commit_id_short})" # Default for testing
             print(f"LLM (placeholder) did not identify a completed feature. Using default '{completed_feature_name}' for email testing.")
         else:
             print(f"Feature '{completed_feature_name}' deemed complete by LLM (placeholder) for project {project_full_name}.")
-
-        print(f"Proceeding to send feature completion email for '{completed_feature_name}' in project {project_full_name}.")
-        await send_feature_completion_email(
-            project_name=project_full_name,
-            feature_name=completed_feature_name,
-            recipient_email=DESIGNATED_EMAIL_ADDRESS
-        )
-        # END TEMPORARY BLOCK
-
-        # Original logic (commented out for now during temporary always-send test):
-        # if completed_feature_name:
-        #     project_full_name = repository_payload.get("full_name", "Unknown Project")
-        #     print(f"Feature '{completed_feature_name}' deemed complete by LLM (placeholder) for project {project_full_name}. Triggering email.")
-        #     await send_feature_completion_email(
-        #         project_name=project_full_name,
-        #         feature_name=completed_feature_name,
-        #         recipient_email=DESIGNATED_EMAIL_ADDRESS
-        #     )
-        # else:
-        #     print(f"Commit {commit_payload['id']} did not signify feature completion according to LLM (placeholder).")
-
     except Exception as e:
-        print(f"Error storing commit details for {commit_payload['id']} or during feature completion check/email: {e}")
-        # Consider retry mechanisms or dead-letter queues for background tasks
+        print(f"Error during feature completion check (determine_feature_completion_and_name_llm) for {commit_payload['id']}: {e}")
+        raise # Re-raise
+
+    try:
+        if completed_feature_name: # Ensure we have a feature name before trying to send
+            print(f"Proceeding to send feature completion email for '{completed_feature_name}' in project {project_full_name}.")
+            await send_feature_completion_email(
+                project_name=project_full_name,
+                feature_name=completed_feature_name,
+                recipient_email=DESIGNATED_EMAIL_ADDRESS
+            )
+        else:
+            # This case might occur if determine_feature_completion_and_name_llm itself errored and completed_feature_name remained None
+            # or if the temporary block logic was changed.
+            print(f"Skipping email for commit {commit_payload['id']} as no feature name was determined (possibly due to an earlier error).")
+    except Exception as e:
+        print(f"Error during send_feature_completion_email for {commit_payload['id']} (feature: '{completed_feature_name}'): {e}")
+        raise # Re-raise
+
+    # Original logic (commented out for now during temporary always-send test):
+    # if completed_feature_name:
+    #     project_full_name = repository_payload.get("full_name", "Unknown Project")
+    #     print(f"Feature '{completed_feature_name}' deemed complete by LLM (placeholder) for project {project_full_name}. Triggering email.")
+    #     await send_feature_completion_email(
+    #         project_name=project_full_name,
+    #         feature_name=completed_feature_name,
+    #         recipient_email=DESIGNATED_EMAIL_ADDRESS
+    #     )
+    # else:
+    #     print(f"Commit {commit_payload['id']} did not signify feature completion according to LLM (placeholder).")
+
+    # except Exception as e:
+    #     print(f"Error storing commit details for {commit_payload['id']} or during feature completion check/email: {e}")
+    # Consider retry mechanisms or dead-letter queues for background tasks
 
 # Example of how you might call this (e.g., from a test or another service)
 # if __name__ == "__main__":
