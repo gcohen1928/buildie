@@ -177,11 +177,6 @@ async def get_project(
             .execute
         )
         
-        # .single() with .execute() should provide data directly or raise an error that Postgrest explicitely catches.
-        # If .execute() returns and response.data is available, it means success.
-        # If the record is not found, PostgrestAPIError (specifically with code PGRST116) should be raised by .single().
-        # If response.data is None after .execute() when not using .single(), it means not found.
-        
         if response.data:
             # The ProjectRead schema will validate the data, including HttpUrl conversion for github_url
             return response.data 
