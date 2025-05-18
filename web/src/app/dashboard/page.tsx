@@ -831,6 +831,7 @@ export default function DashboardPage() {
       
       setTwitterPostResult({ success: true, message: result.message || "Successfully posted!", postedTweets: result.posted_tweets });
 
+
       if (result.posted_tweets && result.posted_tweets.length > 0) {
         const tweetContent = result.posted_tweets.map((t: {text: string}) => t.text).join(" ");
         const now = new Date();
