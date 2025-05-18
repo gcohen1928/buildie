@@ -7,6 +7,7 @@ import openai
 import numpy as np
 from typing import List, Dict, Any
 from supabase import create_client, Client # Added Supabase
+from urllib.parse import urlparse # Added for URL parsing
 
 # NOTE: Requires: pip install gitpython openai numpy tiktoken supabase
 try:
@@ -41,31 +42,102 @@ class RepoIndexer:
             raise ValueError("Supabase URL and Key must be provided or set as environment variables.")
         self.supabase: Client = create_client(_supabase_url, _supabase_key)
         self.supabase_table_name = supabase_table_name or SUPABASE_TABLE_NAME
+        self.current_project_id = None # To store the ID of the project being indexed
+
+    def _create_project_entry(self, repo_url: str) -> str:
+        """
+        Creates a new project entry in the 'projects' table for the given repo_url.
+        Returns the ID of the newly created project.
+        """
+        try:
+            parsed_url = urlparse(repo_url)
+            path_segments = [segment for segment in parsed_url.path.split('/') if segment]
+            
+            if len(path_segments) >= 2:
+                project_name = path_segments[-1]
+                project_full_name = f"{path_segments[-2]}/{path_segments[-1]}"
+            elif len(path_segments) == 1:
+                project_name = path_segments[0]
+                project_full_name = path_segments[0]
+            else:
+                project_name = "unknown_project_name"
+                project_full_name = "unknown_owner/unknown_project_name"
+            
+            # Placeholder for github_repo_id as it's NOT NULL in the schema.
+            # Ideally, this would be fetched via GitHub API or passed in.
+            # Using 0 as a bigint placeholder.
+            github_repo_id_placeholder = 0 
+
+            project_data = {
+                "name": project_name,
+                "full_name": project_full_name,
+                "github_repo_id": github_repo_id_placeholder,
+                "html_url": repo_url,
+                # user_id is also in projects table, not handled here.
+                # Assumes user_id is nullable or has a default in your DB schema,
+                # or this insert will fail if user_id is NOT NULL without a default.
+            }
+            
+            print(f"Attempting to create project entry with data: {project_data}")
+            # Ensure the 'projects' table name is correct if it's different
+            response = self.supabase.table("projects").insert(project_data).execute()
+            
+            if response.data and len(response.data) > 0:
+                project_id = response.data[0]['id']
+                print(f"Successfully created project with ID: {project_id}")
+                return project_id
+            else:
+                # Attempt to construct a more informative error message
+                error_detail = "Unknown error"
+                if hasattr(response, 'error') and response.error:
+                    error_detail = str(response.error)
+                elif hasattr(response, 'status_code') and response.status_code not in [200, 201]: # Check for non-success status codes
+                    error_detail = f"Status: {response.status_code}, Message: {getattr(response, 'message', '') or getattr(response, 'details', '')}"
+                
+                error_message = f"Failed to create project entry for {repo_url}. Details: {error_detail}. Response: {response}"
+                print(error_message)
+                raise Exception(error_message)
+        except Exception as e:
+            print(f"Exception during project creation for {repo_url}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def index_repo(self, repo_url: str) -> bool:
         """
         Download and index the given GitHub repo.
+        Creates a project entry and associates embeddings with it.
         """
         print(f"Starting indexing for repo: {repo_url}")
-        temp_dir = tempfile.mkdtemp()
-        print(f"Created temporary directory: {temp_dir}")
         try:
-            print("Cloning repo...")
-            self._clone_repo(repo_url, temp_dir)
-            print("Repo cloned. Starting code chunking...")
-            code_chunks = self._chunk_codebase(temp_dir)
-            print(f"Code chunking complete. Found {len(code_chunks)} chunks. Starting embedding and live storing...")
-            inserted_count, failed_count = self._embed_chunks_and_store(code_chunks)
-            print(f"Embedding and storing process complete. Total inserted: {inserted_count}, Total failed: {failed_count}.")
-            return True
+            # Create a project entry for this indexing run
+            self.current_project_id = self._create_project_entry(repo_url)
+            # _create_project_entry will raise an exception if it fails, so no need to check here explicitly.
+
+            temp_dir = tempfile.mkdtemp()
+            print(f"Created temporary directory: {temp_dir}")
+            try:
+                print("Cloning repo...")
+                self._clone_repo(repo_url, temp_dir)
+                print("Repo cloned. Starting code chunking...")
+                code_chunks = self._chunk_codebase(temp_dir)
+                print(f"Code chunking complete. Found {len(code_chunks)} chunks. Starting embedding and live storing for project ID: {self.current_project_id}...")
+                inserted_count, failed_count = self._embed_chunks_and_store(code_chunks)
+                print(f"Embedding and storing process complete for project {self.current_project_id}. Total inserted: {inserted_count}, Total failed: {failed_count}.")
+                return True
+            except Exception as e:
+                print(f"An error occurred during indexing: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+            finally:
+                print(f"Cleaning up temporary directory: {temp_dir}")
+                shutil.rmtree(temp_dir)
         except Exception as e:
             print(f"An error occurred during indexing: {e}")
             import traceback
             traceback.print_exc()
             return False
-        finally:
-            print(f"Cleaning up temporary directory: {temp_dir}")
-            shutil.rmtree(temp_dir)
 
     def _clone_repo(self, repo_url: str, dest_dir: str):
         """
@@ -308,6 +380,11 @@ class RepoIndexer:
     def _embed_chunks_and_store(self, code_chunks: List[Dict[str, Any]]) -> tuple[int, int]:
         """Embeds chunks and stores them directly to Supabase in batches as they are processed."""
         
+        if not self.current_project_id:
+            print("Error: current_project_id is not set. Cannot store embeddings without a project ID.")
+            # Count all chunks as failed if no project_id
+            return 0, sum(1 for chunk_doc in code_chunks if chunk_doc['text'].strip())
+
         # Prepare a list of items to process, filtering out chunks that are definitely too large even before OpenAI batching
         # Each item: {'text': str, 'metadata_obj': dict}
         valid_items_to_process = []
@@ -350,6 +427,7 @@ class RepoIndexer:
                         original_meta = openai_batch_original_metadata[j]
                         original_text = openai_batch_texts[j]
                         records_for_supabase_batch.append({
+                            'project_id': self.current_project_id,
                             'content': original_text,
                             'embedding': embedding_list,
                             'file_path': original_meta.get('file'),
@@ -405,6 +483,7 @@ class RepoIndexer:
                     original_meta = openai_batch_original_metadata[j]
                     original_text = openai_batch_texts[j]
                     records_for_supabase_batch.append({
+                        'project_id': self.current_project_id,
                         'content': original_text,
                         'embedding': embedding_list,
                         'file_path': original_meta.get('file'),
