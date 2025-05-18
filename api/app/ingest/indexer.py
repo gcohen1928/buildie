@@ -5,9 +5,12 @@ import git  # gitpython
 import ast
 import openai
 import numpy as np
-from typing import List, Dict, Any
+import logging  # Add explicit logging import
+from typing import List, Dict, Any, Set
 from supabase import create_client, Client # Added Supabase
 from urllib.parse import urlparse # Added for URL parsing
+from postgrest.exceptions import APIError  # Added for handling APIError
+import hashlib  # Added for generating hash-based IDs
 
 # NOTE: Requires: pip install gitpython openai numpy tiktoken supabase
 try:
@@ -23,6 +26,46 @@ except ImportError:
 MAX_TOKENS_PER_CHUNK = 2000  # Stay well below 8192
 MAX_TOKENS_PER_BATCH = 7000  # Leave headroom for batch
 MIN_LINES_PER_CHUNK = 5
+
+# File indexing limits
+MAX_FILE_SIZE_TO_INDEX = 1024 * 1024  # 1MB max file size to process
+ALWAYS_IGNORE_FILES = {
+    # Build artifacts and dependencies
+    'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'node_modules',
+    # Compiled code
+    'dist', 'build', 'target', '.class', '.pyc', '.pyo', '.o', '.so', '.dll', '.exe',
+    # Generated files
+    'generated', '.d.ts', '.min.js', '.min.css', '.bundle.js',
+    # Large data files
+    '.csv', '.tsv', '.parquet', '.avro', '.pb',
+    # Binary and media files (adding more to existing list)
+    '.zip', '.tar', '.gz', '.rar', '.jar', '.war', '.ear', '.ico', '.woff', '.woff2', '.ttf', '.eot',
+    # Docker related
+    'Dockerfile.lock', 'docker-compose.override.yml',
+    # IDE and editor files
+    '.idea', '.vscode', '.project', '.classpath', '.settings',
+}
+
+# File extensions to ignore (augmenting the existing list)
+IGNORE_EXTENSIONS = {
+    # Documentation
+    '.md', '.txt', '.rst', '.pdf', '.docx',
+    # Data formats
+    '.json', '.lock', '.sum', '.yaml', '.yml', 
+    # Media files
+    '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp',
+    # Binary files
+    '.bin', '.dat', '.db', '.sqlite', '.sqlite3',
+    # Archive files
+    '.zip', '.tar', '.gz', '.rar', '.7z',
+}
+
+# Directories to ignore
+IGNORE_DIR_PATTERNS = {
+    'test', 'tests', 'example', 'examples', 'doc', 'docs', 'node_modules',
+    'vendor', 'third_party', 'build', 'dist', 'out', 'target', '.git', '.github',
+    'archive', 'backup', 'temp', 'tmp'
+}
 
 SUPABASE_TABLE_NAME = "code_embeddings"
 
@@ -63,15 +106,16 @@ class RepoIndexer:
                 project_name = "unknown_project_name"
                 project_full_name = "unknown_owner/unknown_project_name"
             
-            # Placeholder for github_repo_id as it's NOT NULL in the schema.
-            # Ideally, this would be fetched via GitHub API or passed in.
-            # Using 0 as a bigint placeholder.
-            github_repo_id_placeholder = 0 
+            # Generate a unique github_repo_id based on the repository URL
+            # This ensures uniqueness without requiring the GitHub API
+            # We use a positive integer by taking the absolute value of the hash
+            github_repo_id = abs(int(hashlib.md5(repo_url.encode()).hexdigest(), 16) % (10 ** 16))
+            print(f"Generated github_repo_id: {github_repo_id} for repo: {repo_url}")
 
             project_data = {
                 "name": project_name,
                 "full_name": project_full_name,
-                "github_repo_id": github_repo_id_placeholder,
+                "github_repo_id": github_repo_id,
                 "html_url": repo_url,
                 # user_id is also in projects table, not handled here.
                 # Assumes user_id is nullable or has a default in your DB schema,
@@ -97,6 +141,64 @@ class RepoIndexer:
                 error_message = f"Failed to create project entry for {repo_url}. Details: {error_detail}. Response: {response}"
                 print(error_message)
                 raise Exception(error_message)
+        except APIError as e:
+            # Check the specific constraint violation
+            error_code = getattr(e, 'code', None)
+            error_details = str(e)
+            
+            if error_code == '23505':  # PostgreSQL unique violation error code
+                # Handle either github_repo_id or full_name constraint violation
+                
+                if 'projects_github_repo_id_key' in error_details:
+                    # Handle github_repo_id constraint
+                    print(f"Duplicate github_repo_id detected for {repo_url}. Finding existing project...")
+                    
+                    try:
+                        query_response = self.supabase.table("projects").select("id").eq("github_repo_id", github_repo_id).execute()
+                        
+                    except Exception as query_error:
+                        print(f"Error finding existing project by github_repo_id: {query_error}")
+                        raise
+                        
+                elif 'projects_full_name_key' in error_details:
+                    # Handle full_name constraint
+                    print(f"Project with full_name '{project_full_name}' already exists. Finding existing project...")
+                    
+                    try:
+                        query_response = self.supabase.table("projects").select("id").eq("full_name", project_full_name).execute()
+                        
+                    except Exception as query_error:
+                        print(f"Error finding existing project by full_name: {query_error}")
+                        raise
+                else:
+                    # Some other unique constraint - re-raise
+                    print(f"API Error during project creation for {repo_url}: {e}")
+                    raise
+                
+                # Common handling for both constraint types after finding the existing project
+                if query_response.data and len(query_response.data) > 0:
+                    existing_project_id = query_response.data[0]['id']
+                    print(f"Found existing project with ID: {existing_project_id}")
+                    
+                    # Delete all existing embeddings for this project
+                    print(f"Deleting existing embeddings for project ID: {existing_project_id}")
+                    delete_response = self.supabase.table(self.supabase_table_name).delete().eq("project_id", existing_project_id).execute()
+                    
+                    # Check if delete was successful
+                    if hasattr(delete_response, 'error') and delete_response.error:
+                        print(f"Warning: Error deleting existing embeddings: {delete_response.error}")
+                    else:
+                        print(f"Successfully deleted existing embeddings for project ID: {existing_project_id}")
+                    
+                    return existing_project_id
+                else:
+                    constraint_type = "github_repo_id" if 'projects_github_repo_id_key' in error_details else "full_name"
+                    constraint_value = github_repo_id if constraint_type == "github_repo_id" else project_full_name
+                    raise Exception(f"Could not find existing project with {constraint_type}={constraint_value} despite duplicate key error")
+            else:
+                # Not a unique constraint violation - re-raise
+                print(f"API Error during project creation for {repo_url}: {e}")
+                raise
         except Exception as e:
             print(f"Exception during project creation for {repo_url}: {e}")
             import traceback
@@ -163,27 +265,64 @@ class RepoIndexer:
         """
         code_chunks = []
         file_count = 0
-        for root, _, files in os.walk(repo_dir):
+        skipped_count = 0
+        
+        for root, dirs, files in os.walk(repo_dir):
+            # Skip directories that match ignore patterns
+            dirs_to_remove = []
+            for d in dirs:
+                if d.startswith('.') or any(pattern in d.lower() for pattern in IGNORE_DIR_PATTERNS):
+                    dirs_to_remove.append(d)
+            
+            for d in dirs_to_remove:
+                dirs.remove(d)
+            
             for fname in files:
                 file_count += 1
                 fpath = os.path.join(root, fname)
                 rel_path = os.path.relpath(fpath, repo_dir)
-                print(f"Processing file {file_count}: {rel_path}")
-                if fname.startswith('.') or fname.endswith('.md') or fname.endswith('.txt') or \
-                   fname.endswith('.json') or fname.endswith('.lock') or fname.endswith('.sum') or \
-                   fname.endswith('.svg') or fname.endswith('.png') or fname.endswith('.jpg') or \
-                   fname.endswith('.jpeg') or fname.endswith('.gif') or fname.endswith('.toml') or \
-                   fname.endswith('.yaml') or fname.endswith('.yml') or 'test' in rel_path.lower() or \
-                   'example' in rel_path.lower(): # Added more common ignores
-                    print(f"  Skipping (generic ignore): {rel_path}")
+                
+                # Detailed skip reasons for better logging
+                skip_reason = None
+                
+                # Check filename patterns first (quick check)
+                if fname.startswith('.'):
+                    skip_reason = "hidden file"
+                elif fname in ALWAYS_IGNORE_FILES:
+                    skip_reason = "ignored filename"
+                elif any(fname.endswith(ext) for ext in IGNORE_EXTENSIONS):
+                    skip_reason = "ignored extension"
+                elif any(pattern in rel_path.lower() for pattern in IGNORE_DIR_PATTERNS):
+                    skip_reason = "ignored directory pattern"
+                
+                # Check file size if not already skipped
+                if not skip_reason:
+                    try:
+                        file_size = os.path.getsize(fpath)
+                        if file_size > MAX_FILE_SIZE_TO_INDEX:
+                            skip_reason = f"file too large ({file_size / (1024*1024):.2f}MB)"
+                    except Exception as e:
+                        skip_reason = f"error checking size: {e}"
+                
+                if skip_reason:
+                    skipped_count += 1
+                    if file_count % 100 == 0 or skipped_count < 10:  # Limit logging for large repos
+                        print(f"  Skipping ({skip_reason}): {rel_path}")
                     continue
+                    
+                if file_count % 50 == 0:
+                    print(f"Processing file {file_count} (skipped {skipped_count}): {rel_path}")
+                
                 try:
                     if fname.endswith('.py'):
                         code_chunks.extend(self._chunk_python_file(fpath, rel_path))
                     else:
                         code_chunks.extend(self._chunk_text_file(fpath, rel_path))
                 except Exception as e:
-                    print(f"Skipping {fpath}: {e}")
+                    print(f"Error processing {fpath}: {e}")
+                    skipped_count += 1
+                    
+        print(f"Processed {file_count} files, skipped {skipped_count}, generated {len(code_chunks)} chunks")
         return code_chunks
 
     def _chunk_python_file(self, fpath: str, rel_path: str) -> List[Dict[str, Any]]:

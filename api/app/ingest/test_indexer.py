@@ -15,10 +15,11 @@ def load_env():
 
 async def main():
     load_env()
+
     indexer = RepoIndexer()
 
     # test_repo_url = "https://github.com/Srachuri-code/H2HApp" 
-    test_repo_url = "https://github.com/psf/requests-html" # Using a different small repo for variety
+    test_repo_url = "https://github.com/Srachuri-code/Heart2HeartSignUp" # Using a different small repo for variety
     print(f"Indexing repo: {test_repo_url}")
     
     success = indexer.index_repo(test_repo_url)
