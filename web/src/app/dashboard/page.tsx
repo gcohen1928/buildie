@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import ChatInput from '@/components/Dashboard/ChatInput';
 import CommitHistoryTable, { Commit } from '@/components/Dashboard/CommitHistoryTable';
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"; // For pagination buttons
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Added Tabs
 import { Badge } from "@/components/ui/badge"; // Added Badge
-import { Paperclip, ArrowRight, Globe, Settings2, SearchCode, PenTool, AlertTriangle, Sparkles, Zap, Bot, Wand2, CheckCircle2, Github, DownloadCloud, GitCommit, LayoutDashboard, Loader2, GitFork, ListChecks, FileText, X } from "lucide-react"; // Changed PowerPlug to Zap and added X icon
+import { Paperclip, ArrowRight, Globe, Settings2, SearchCode, PenTool, AlertTriangle, Sparkles, Zap, Bot, Wand2, CheckCircle2, Github, DownloadCloud, GitCommit, LayoutDashboard, Loader2, GitFork, ListChecks, FileText, X, PlayCircle } from "lucide-react"; // Changed PowerPlug to Zap and added X icon, Added PlayCircle
 import React from 'react'; // Ensure React is imported for JSX types
 import { motion, AnimatePresence } from 'framer-motion'; // Import motion and AnimatePresence
 
@@ -101,10 +101,13 @@ interface GenerationInProgressViewProps {
   currentStepTitle: string;
   currentStepDetail: string;
   generatedContent: string[] | null;
+  setGeneratedContent: (content: string[] | null) => void;
   editableTweetText: string;
   setEditableTweetText: (text: string) => void;
   onUseContent: () => void;
   onDoneOrCancel: () => void;
+  isPostingToTwitter: boolean;
+  twitterPostResult: { success: boolean; message: string; tweetUrl?: string; postedTweets?: Array<{id: string; text: string; url: string}> } | null;
 }
 
 // Define GenerationInProgressView outside DashboardPage and wrap with React.memo
@@ -118,10 +121,13 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
     currentStepTitle,
     currentStepDetail,
     generatedContent,
+    setGeneratedContent,
     editableTweetText,
     setEditableTweetText,
     onUseContent,
-    onDoneOrCancel
+    onDoneOrCancel,
+    isPostingToTwitter,
+    twitterPostResult
   }
 ) => {
   console.log("%%% GenerationInProgressView render %%%", currentStepTitle, currentStepDetail);
@@ -164,7 +170,7 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
           {/* Main Progress Indicator - Icon, Static Title, Animated Detail Text */}
           {!isLlmProcessingComplete && (
             <motion.div
-              className="flex flex-col items-center justify-start mb-8 p-4 bg-slate-700/30 rounded-lg min-h-[200px] md:min-h-[240px] ring-1 ring-slate-600"
+              className="flex flex-col items-center justify-center mb-8 p-4 bg-slate-700/30 rounded-lg min-h-[200px] md:min-h-[240px] ring-1 ring-slate-600"
             >
               <AnimatePresence mode="wait">
                 <motion.div
@@ -188,9 +194,20 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
                   <h3 className="text-xl md:text-2xl text-slate-100 font-semibold mb-2 md:mb-3 text-center">
                     {currentStepTitle}
                   </h3>
-                  <p className="text-xs md:text-sm text-slate-400/70 text-center min-h-[50px] md:min-h-[70px] w-full px-2 leading-snug">
-                    {currentStepDetail && <AnimatedTypingText fullText={currentStepDetail} charTypingDelay={0.008} className="text-slate-400/80" />}
-                  </p>
+                  <AnimatePresence mode="wait">
+                    <motion.div // Using motion.div as a wrapper for the paragraph to handle key and animations for detail changes
+                      key={currentStepDetail} // Animate when detail text changes
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5, transition: { duration: 0.2 } }} // Smooth fade out for old text
+                      className="w-full"
+                    >
+                      <p className="text-xs md:text-sm text-slate-400/70 text-center min-h-[50px] md:min-h-[70px] w-full px-2 leading-snug flex items-center justify-center">
+                        {currentStepDetail && <AnimatedTypingText fullText={currentStepDetail} charTypingDelay={0.008} className="text-slate-400/80" />}
+                        {!currentStepDetail && <span className="italic text-slate-500">Processing...</span>} {/* Fallback for empty detail */}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
                 </motion.div>
               </AnimatePresence>
             </motion.div>
@@ -209,40 +226,138 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
                 <div className="p-4 border border-red-500/50 bg-red-500/10 rounded-lg text-red-400"><AlertTriangle className="inline h-5 w-5 mr-2" />Error: {generationError}</div>
               ) : generatedContent && generatedContent.length > 0 ? (
                 <div className="p-4 border border-slate-600 rounded-lg bg-black shadow-lg">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <Skeleton className="h-10 w-10 rounded-full bg-slate-700" /> 
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-1 mb-2">
-                        <span className="font-semibold text-slate-100">Your Name</span>
-                        <span className="text-sm text-slate-500">@username</span>
-                        <span className="text-sm text-slate-500">· Now</span>
-                      </div>
-                      <Textarea
-                        value={editableTweetText} 
-                        onChange={(e) => {
-                          setEditableTweetText(e.target.value);
-                        }}
-                        className="w-full bg-slate-800 border-slate-700 text-slate-200 text-sm font-mono resize-none focus:ring-purple-500 p-3 rounded min-h-[150px] h-auto"
-                        placeholder="Edit generated content..."
-                      />
-                      <div className="mt-4 flex justify-between items-center">
-                        <div className="flex space-x-5 text-slate-500">
-                          <button aria-label="Comment" className="hover:text-sky-500 flex items-center space-x-1"><Paperclip size={14}/><span>0</span></button> 
-                          <button aria-label="Retweet" className="hover:text-green-500 flex items-center space-x-1"><ArrowRight size={14}/><span>0</span></button> 
-                          <button aria-label="Like" className="hover:text-pink-500 flex items-center space-x-1"><Globe size={14}/><span>0</span></button> 
-                          <button aria-label="Share" className="hover:text-sky-500"><Paperclip size={14}/></button> 
+                  {/* New Threaded View */}
+                  <div className="space-y-0"> {/* Container for all tweets */}
+                    {generatedContent.map((tweetText, index) => {
+                      const videoPlaceholderMatch = tweetText.match(/\[Video:(.*?)\]/);
+                      const hasVideo = index === 0 && videoPlaceholderMatch;
+                      const cleanTweetText = tweetText.replace(/\[Video:.*?\]/g, '').trim();
+                      const videoPath = videoPlaceholderMatch?.[1].trim();
+
+                      return (
+                        <div key={index} className="flex space-x-3">
+                          {/* Left column for Avatar and Connecting Line */}
+                          <div className="flex flex-col items-center pt-1"> {/* Added pt-1 to align avatar with text better */}
+                            {/* <Skeleton className="h-10 w-10 rounded-full bg-slate-700 flex-shrink-0" /> */}
+                            <img src="/gabe-avatar.png" alt="User Avatar" className="h-10 w-10 rounded-full flex-shrink-0 object-cover" />
+                            {/* Vertical line connecting tweets, if not the last tweet */}
+                            {index < generatedContent.length - 1 && (
+                              <div className="w-0.5 flex-grow bg-slate-600 my-1.5 rounded-full"></div>
+                            )}
+                          </div>
+
+                          {/* Right column for Tweet Content */}
+                          <div className={`flex-1 ${index < generatedContent.length - 1 ? 'pb-5' : 'pb-1'}`}>
+                            <div className="flex items-center space-x-1.5 mb-1">
+                              <span className="font-semibold text-slate-100 text-sm">Gabe</span>
+                              <span className="text-xs text-slate-500">@glenomenagabe</span>
+                              <span className="text-xs text-slate-500">· Now</span>
+                            </div>
+                            
+                            <Textarea
+                              value={cleanTweetText} 
+                              onChange={(e) => {
+                                const newText = e.target.value;
+                                const newGeneratedContent = generatedContent.map((content, idx) => {
+                                  if (idx === index) {
+                                    // If it's the first tweet and it originally had a video, preserve the video tag.
+                                    const originalTweet = generatedContent[index]; 
+                                    const videoMatch = originalTweet.match(/\[Video:(.*?)\]/);
+                                    if (index === 0 && videoMatch) {
+                                      return `${newText.trim()} ${videoMatch[0]}`;
+                                    }
+                                    return newText;
+                                  }
+                                  return content;
+                                });
+                                setGeneratedContent(newGeneratedContent);
+                                setEditableTweetText(newGeneratedContent.join("\n\n---\n\n"));
+                              }}
+                              className="w-full bg-slate-900/80 border-slate-700 text-slate-200 text-sm resize-none focus:ring-purple-500 focus:border-purple-500 p-2.5 rounded-md min-h-[100px] h-auto placeholder:text-slate-500 transition-colors duration-150 ease-in-out shadow-sm hover:bg-slate-800/90 focus:bg-slate-900"
+                              placeholder={`Edit tweet ${index + 1}...`}
+                            />
+
+                            {hasVideo && videoPath && (
+                              <div className="mt-2.5 mb-1 border border-slate-700 bg-slate-800/50 rounded-lg overflow-hidden shadow-md">
+                                <div className="aspect-video flex flex-col items-center justify-center text-slate-400 p-2">
+                                  <PlayCircle className="h-10 w-10 md:h-12 md:w-12 mb-1.5 text-slate-500" />
+                                  <span className="text-xs md:text-sm">Video Preview</span>
+                                  <span className="text-xs text-slate-600 mt-0.5 truncate max-w-full px-2">(mock: {videoPath})</span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Action icons */}
+                            <div className="flex space-x-5 text-slate-500 mt-3">
+                              <button aria-label="Comment" className="hover:text-sky-400 flex items-center space-x-1 transition-colors">
+                                <Paperclip size={16}/>
+                              </button> 
+                              <button aria-label="Retweet" className="hover:text-emerald-400 flex items-center space-x-1 transition-colors">
+                                <ArrowRight size={16}/>
+                              </button> 
+                              <button aria-label="Like" className="hover:text-pink-400 flex items-center space-x-1 transition-colors">
+                                <Globe size={16}/>
+                              </button> 
+                            </div>
+                          </div>
                         </div>
-                        <Button 
-                          className="bg-sky-500 hover:bg-sky-600 rounded-full px-4 py-1.5 text-sm font-bold text-white"
-                          onClick={onUseContent} 
-                        >
-                          Use This Content
-                        </Button>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
+
+                  {/* "Use This Content" Button - now appears after the thread */}
+                  <div className="mt-8 flex justify-end items-center gap-4">
+                    {twitterPostResult && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`text-sm p-2.5 rounded-md ${
+                          twitterPostResult.success ? 'bg-green-500/10 text-green-400 ring-1 ring-green-500/30' : 'bg-red-500/10 text-red-400 ring-1 ring-red-500/30'
+                        }`}
+                      >
+                        {twitterPostResult.message}
+                        {twitterPostResult.success && twitterPostResult.postedTweets && twitterPostResult.postedTweets[0]?.url && (
+                          <a
+                            href={twitterPostResult.postedTweets[0].url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 underline hover:text-green-300"
+                          >
+                            View Tweet
+                          </a>
+                        )}
+                      </motion.div>
+                    )}
+                    <Button 
+                      className="bg-sky-500 hover:bg-sky-600 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
+                      onClick={onUseContent}
+                      disabled={isPostingToTwitter || (twitterPostResult?.success ?? false)}
+                    >
+                      {isPostingToTwitter ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Posting to Twitter...
+                        </>
+                      ) : twitterPostResult?.success ? (
+                        <>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Posted!
+                        </>
+                      ) : (
+                        "Post to Twitter" // Changed button text
+                      )}
+                    </Button>
+                  </div>
+                  
+                  {/* Optional: Textarea for editing the full thread string, if desired for debugging or direct manipulation */}
+                  {/* <Textarea
+                    value={editableTweetText} 
+                    onChange={(e) => {
+                      setEditableTweetText(e.target.value);
+                    }}
+                    className="mt-4 w-full bg-slate-900 border-slate-700 text-slate-300 text-xs font-mono resize-none focus:ring-purple-600 p-2.5 rounded-md min-h-[100px] h-auto"
+                    placeholder="Raw tweet thread text for editing..."
+                  /> */}
                 </div>
               ) : (
                 <div className="p-4 border border-slate-700 bg-slate-800/30 rounded-lg text-slate-400 italic">No content generated or an issue occurred.</div>
@@ -430,6 +545,9 @@ export default function DashboardPage() {
   // State to ensure auto-start from URL only happens once
   const [hasAutoStartedFromUrl, setHasAutoStartedFromUrl] = useState(false);
 
+  // Ref to manage the icon displayed for a group of steps with the same title
+  const activeDisplayGroupRef = useRef<{ title: string | null; icon: React.ReactNode | null }>({ title: null, icon: null });
+
   // New state for active tab view
   const [activeTab, setActiveTab] = useState("activity");
 
@@ -461,6 +579,26 @@ export default function DashboardPage() {
   // New state for selected commits
   const [selectedCommitShas, setSelectedCommitShas] = useState<string[]>([]);
 
+  // State for Twitter posting
+  const [isPostingToTwitter, setIsPostingToTwitter] = useState(false);
+  const [twitterPostResult, setTwitterPostResult] = useState<{ success: boolean; message: string; tweetUrl?: string; postedTweets?: Array<{id: string; text: string; url: string}> } | null>(null);
+  const [didJustPost, setDidJustPost] = useState(false); // Flag to control fetchPreviousContent
+  
+  // Function to return to dashboard view
+  const returnToDashboard = useCallback(() => {
+    setIsGenerating(false);
+    setLlmStream([]);
+    setGeneratedContent(null);
+    setCurrentPrompt("");
+    setGenerationError(null); 
+    setIsLlmProcessingComplete(false);
+    activeDisplayGroupRef.current = { title: null, icon: null }; 
+    setCurrentStepIcon(null);
+    setCurrentStepTitle("");
+    setCurrentStepDetail("");
+    // We don't reset twitterPostResult here so it's available in dashboard
+  }, []);
+
   // Define handlers before useEffects that might use them
   const handleSendMessage = useCallback(async (message: string) => {
     if (!projectId) {
@@ -484,7 +622,16 @@ export default function DashboardPage() {
     setCurrentStepDetail("");
 
     const updateStep = (icon: React.ReactNode, title: string, detail: string, logMessage?: string) => {
-      setCurrentStepIcon(icon);
+      // Logic for conditional icon update
+      if (title !== activeDisplayGroupRef.current.title || activeDisplayGroupRef.current.title === null) {
+        setCurrentStepIcon(icon);
+        activeDisplayGroupRef.current = { title, icon };
+      } else {
+        // Title is the same, ensure we use the stored icon for this group, not necessarily the one passed in
+        // (in case chainOfThoughtSteps defines a different icon for a sub-step with the same title)
+        setCurrentStepIcon(activeDisplayGroupRef.current.icon);
+      }
+
       setCurrentStepTitle(title);
       setCurrentStepDetail(detail);
       setLlmStream(prev => [...prev, logMessage || `${title}: ${detail.substring(0,70)}...`]);
@@ -494,63 +641,81 @@ export default function DashboardPage() {
     const projectNameForDisplay = project?.name || "project context";
 
     const chainOfThoughtSteps = [
-      {
-        icon: <Settings2 className="h-8 w-8 text-slate-400" />,
-        title: "Agent Core Bootup",
-        detail: "Initializing agent kernel. Loading cognitive modules: [ContextParser, DiffAnalyzer, CreativeEngine, OutputFormatter]. Verifying API endpoints. System status: Nominal.",
-        duration: 2200, 
-        log: "AgentKernel: Boot sequence initiated."
-      },
+      // Step 1: RAG Search & Browser Prompt Generation (multiple sub-details)
       {
         icon: <SearchCode className="h-8 w-8 text-slate-400" />,
-        title: "Contextual Data Ingestion",
-        detail: `Fetching project data stream for '${projectNameForDisplay}'. Accessing: Git log, file tree, README.md, issue tracker metadata. Parsing structure. Data integrity check: OK.`, 
-        duration: 2800,
-        log: `ContextParser: Ingesting data for ${projectNameForDisplay}.`
+        title: "RAG Search & Prompt Generation",
+        detail: "Scanning recent commit diffs for the 'Project Import & Indexing' feature. Generating embeddings for changed code blocks (e.g., `ProjectIndexingView.tsx`, `api/projects/routes.py`). Initiating similarity search across the indexed codebase vectors...",
+        duration: 1200, // Adjusted for cutoff
+        log: "RAGAgent: Analyzing diffs and generating embeddings for similarity search."
       },
       {
-        icon: <GitCommit className="h-8 w-8 text-slate-400" />,
-        title: "Change Analysis Routine",
-        detail: "Executing diff analysis on recent commits. Identifying key modified files: [X, Y, Z]. Extracting code snippets and commit messages. Calculating change impact score. Focusing on high-impact deltas.",
-        duration: 3000,
-        log: "DiffAnalyzer: Processing recent commit activity."
+        icon: <SearchCode className="h-8 w-8 text-slate-400 filter hue-rotate-15" />, // Slightly different icon look
+        title: "RAG Search & Prompt Generation",
+        detail: "Retrieved relevant code chunks: Main UI logic in `ProjectIndexingView.tsx` showing loading states, backend API endpoints in `api/projects/routes.py` handling the clone and parse. These are key for demonstrating the feature.",
+        duration: 1000, // Adjusted for cutoff
+        log: "RAGAgent: Key code sections identified for feature demonstration context."
       },
       {
         icon: <FileText className="h-8 w-8 text-slate-400" />,
-        title: "Prompt Deconstruction",
-        detail: `Parsing user prompt: "${userPromptSnippet}". Extracting keywords and intent vectors. Semantic analysis: [entity_1, entity_2, sentiment, desired_format]. Cross-referencing with project context.`,
-        duration: 2500,
-        log: `NLPModule: Deconstructing user prompt.`
+        title: "RAG Search & Prompt Generation",
+        detail: "Synthesizing findings from code analysis. Constructing a focused natural language prompt for the Browser Automation Agent to accurately navigate and showcase the new project indexing user flow. Prompt: 'Record a video of importing a new project, showing the full indexing process and successful dashboard setup.'",
+        duration: 1500, // Adjusted for cutoff
+        log: "RAGAgent: Browser agent prompt generated based on code analysis."
       },
+      // Step 2: Automated Feature Recording
+      {
+        icon: <Github className="h-8 w-8 text-slate-400" />,
+        title: "Automated Feature Recording",
+        detail: "Requesting ephemeral test environment. Spinning up a Docker container (buildie-app:latest) with the most recent build. Waiting for services to be healthy...",
+        duration: 1000, // Adjusted for cutoff
+        log: "InfraManager: Test environment provisioned, container starting."
+      },
+      {
+        icon: <PlayCircle className="h-8 w-8 text-slate-400" />,
+        title: "Automated Feature Recording",
+        detail: "Launching Playwright browser agent. Executing automated script to showcase the project import. This will capture a 10-second video of the complete user flow: [Login > Dashboard > Import > Indexing > Success]...",
+        duration: 10000, // Increased to 10 seconds for this specific step
+        log: "BrowserAgent: Playwright script initiated for a 10-second video capture."
+      },
+      {
+        icon: <DownloadCloud className="h-8 w-8 text-slate-400" />,
+        title: "Automated Feature Recording",
+        detail: "10-second video recording successful. Dimensions: 1920x1080. Uploading `project-indexing-demo-10s.mp4` to secure media storage. Initiating transcoding for web optimization (H.264, AAC).",
+        duration: 1200, // Adjusted for cutoff
+        log: "MediaService: 10s video captured, uploaded, and transcoding started."
+      },
+      // Step 3: AI Content Drafting
       {
         icon: <Bot className="h-8 w-8 text-slate-400" />,
-        title: "Cognitive Synthesis Loop",
-        detail: "Initiating synthesis phase. Correlating prompt intent with analyzed changes. Generating potential narrative threads. Evaluating relevance scores for N content angles. Iteration 1/3... Iteration 2/3... Prioritizing top  K hypotheses.",
-        duration: 3500,
-        log: "CognitiveEngine: Synthesizing information, generating hypotheses."
+        title: "AI Content Drafting",
+        detail: "Contextualizing for content generation: New feature is 'Project Import & Indexing', video is ready (`project-indexing-demo.mp4`). Target Audience: Developers, #buildinpublic. Goal: Announce feature, highlight ease-of-use & automation.",
+        duration: 1200, // Adjusted for cutoff
+        log: "ContentAI: Context established for tweet generation."
       },
       {
-        icon: <PenTool className="h-8 w-8 text-slate-400" />,
-        title: "Creative Content Generation",
-        detail: "Activating Creative Engine. Drafting multiple content pieces based on prioritized hypotheses. Applying linguistic style parameters. Generating variations for tone and length. Ensuring adherence to platform constraints (e.g., tweet character limits).",
-        duration: 3000,
-        log: "CreativeEngine: Drafting content variations."
+        icon: <Wand2 className="h-8 w-8 text-slate-400" />,
+        title: "AI Content Drafting",
+        detail: "Generating initial tweet thread drafts. Iteration 1: Focus on speed. Iteration 2: Focus on visual appeal with video. Iteration 3: Combining clarity, engagement, and a non-cringey tone. Ensuring video is referenced appropriately.",
+        duration: 1400, // Adjusted for cutoff
+        log: "ContentAI: Iteratively drafting tweet thread options."
       },
       {
-        icon: <ListChecks className="h-8 w-8 text-slate-400" />,
-        title: "Output Structuring & Validation",
-        detail: "Consolidating generated content. Formatting into a structured output (e.g., tweet thread object). Performing quality checks: [coherence, grammar, factual_accuracy_check (simulated)]. Final review pass before handoff.",
-        duration: 2800,
-        log: "OutputFormatter: Validating and structuring final content."
+        icon: <ListChecks className="h-8 w-8 text-emerald-400" />, // Success indication
+        title: "AI Content Drafting",
+        detail: "Refining the best draft. Ensuring the video is clearly signposted in the first tweet. Adding relevant hashtags (#buildinpublic, #devtool, #automation, #opensource, #ai). Final content package ready for user review.",
+        duration: 1200, // Adjusted for cutoff
+        log: "ContentAI: Final tweet thread polished and ready."
       },
     ];
 
     try {
       for (const step of chainOfThoughtSteps) {
-        updateStep(step.icon, step.title, step.detail, step.log);
-        const estimatedTypingTime = step.detail.length * 8; // 8ms per char with charTypingDelay={0.008}
-        const bufferTime = 700; // Reduced buffer as typing is faster
-        await new Promise(resolve => setTimeout(resolve, Math.max(step.duration, estimatedTypingTime + bufferTime) ));
+        updateStep(activeDisplayGroupRef.current.icon || step.icon, step.title, step.detail, step.log); // Use active group icon if title matches, else new step icon
+        
+        // Use the step's defined duration directly to allow for text cutoff
+        await new Promise(resolve => setTimeout(resolve, step.duration));
+
         if (!isGeneratingRef.current) {
           console.log("Generation cancelled during thought process.");
           return;
@@ -567,37 +732,37 @@ export default function DashboardPage() {
       setLlmStream(prev => [...prev, `📞 Calling generation endpoint: ${apiUrl}/api/generate/demo with commits: ${selectedCommitShas.join(', ') || 'none'}`]);
       await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate network latency for API call
 
-      const response = await fetch(`${apiUrl}/api/generate/demo`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      // Simulate API response for the new scenario
+      // const response = await fetch(`${apiUrl}/api/generate/demo`, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify(requestBody),
+      // });
       
       if (!isGeneratingRef.current) return;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Unknown API error" }));
-        updateStep(<AlertTriangle className="h-8 w-8 text-red-500" />, "API Error", errorData.detail || `Service request failed: ${response.status}`, `Agent: API Error - ${errorData.detail || response.statusText}`);
-        throw new Error(errorData.detail || `API Error: ${response.status} ${response.statusText}`);
-      }
+      // if (!response.ok) {
+      //   const errorData = await response.json().catch(() => ({ detail: "Unknown API error" }));
+      //   updateStep(<AlertTriangle className="h-8 w-8 text-red-500" />, "API Error", errorData.detail || `Service request failed: ${response.status}`, `Agent: API Error - ${errorData.detail || response.statusText}`);
+      //   throw new Error(errorData.detail || `API Error: ${response.status} ${response.statusText}`);
+      // }
       
-      updateStep(<Wand2 className="h-8 w-8 text-emerald-500" />, "Processing Response", "Successfully received response from our intelligent agent. Parsing and formatting the generated content for your review...", "Agent: Formatting final output..."); 
+      updateStep(<Wand2 className="h-8 w-8 text-emerald-500" />, "Processing & Crafting Content", "Successfully simulated agent analysis. Formatting the generated content for your review...", "Agent: Formatting final output..."); 
       await new Promise(resolve => setTimeout(resolve, 1500)); 
-      const result = await response.json();
-      setLlmStream(prev => [...prev, "👍 Agent responded! Content received and parsed."]);
+      // const result = await response.json(); // No actual API call, direct content set below
       
-      if (result.tweet_thread && Array.isArray(result.tweet_thread)) {
-        setGeneratedContent(result.tweet_thread);
-        setEditableTweetText(result.tweet_thread.join("\n\n---\n\n"));
-      } else {
-        const errorMsg = "Received unexpected content format from agent.";
-        setGeneratedContent([errorMsg]);
-        setEditableTweetText(errorMsg);
-        setLlmStream(prev => [...prev, `❗ Error: ${errorMsg}`]);
-      }
+      const newTweetThread = [
+        "Just shipped a cool new way to get started with Buildie! 🚀 Now you can easily import your GitHub projects, and we'll automagically index your codebase & commit history. Check out this quick walkthrough of the new indexing flow in action! 👇 #buildinpublic #devtool #automation [Video: /static/videos/project-indexing-demo.mp4]",
+        "This means a smoother onboarding and Buildie gets all the context it needs right from the get-go to help you create awesome content about your dev journey. Less setup, more building (and sharing!). What do you think? Full steam ahead! 🚂 #opensource #ai"
+      ];
+
+      setGeneratedContent(newTweetThread);
+      setEditableTweetText(newTweetThread.join("\n\n---\n\n"));
+      setLlmStream(prev => [...prev, "👍 Agent crafted a new tweet thread! Content received and parsed."]);
       setIsLlmProcessingComplete(true);
+      setTwitterPostResult(null); // Reset any previous post result when new content is generated
 
     } catch (error: any) {
       if (!isGeneratingRef.current) {
@@ -621,24 +786,89 @@ export default function DashboardPage() {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
 
-  const handleUseContent = useCallback(() => {
-    const updatedContentArray = editableTweetText.split("\n\n---\n\n");
-    setGeneratedContent(updatedContentArray);
-    console.log("Using content (array):", updatedContentArray);
-    console.log("Original editable text:", editableTweetText);
-  }, [editableTweetText]);
+  const fetchPreviousContent = useCallback(async (currentProjectId: string) => {
+    if (!currentProjectId || didJustPost) { // Check the flag here
+      if(didJustPost) console.log("Skipping fetchPreviousContent because didJustPost is true.");
+      // Even if skipping, ensure loading state is false if it was somehow true
+      setIsLoadingPreviousContent(false);
+      return;
+    }
+
+    // Only clear and "fetch" if the previousContent array is truly empty.
+    if (previousContent.length === 0) {
+      console.log(`Fetching previous content for project ID: ${currentProjectId} (list is empty, will clear for demo)`);
+      setIsLoadingPreviousContent(true);
+      setPreviousContentError(null);
+      setPreviousContent([]); 
+      setIsLoadingPreviousContent(false);
+    } else {
+      console.log("Skipping fetchPreviousContent as content already exists (already loaded).");
+      setIsLoadingPreviousContent(false); // Ensure loading is false here too
+      setPreviousContentError(null);    // And error is cleared
+    }
+  }, [previousContent, didJustPost]); // Add didJustPost to dependency array
+
+  const handleUseContent = useCallback(async () => {
+    const contentToPostArray = editableTweetText.split("\n\n---\n\n").map(s => s.trim()).filter(s => s.length > 0);
+    if (contentToPostArray.length === 0) {
+      setTwitterPostResult({ success: false, message: "Cannot post empty content." });
+      return;
+    }
+
+    console.log("Attempting to post to Twitter:", contentToPostArray);
+    setIsPostingToTwitter(true);
+    setTwitterPostResult(null);
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await fetch(`${apiUrl}/api/post_tweet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", },
+        body: JSON.stringify({ content: contentToPostArray }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || `Failed to post to Twitter: ${response.statusText}`);
+      
+      setTwitterPostResult({ success: true, message: result.message || "Successfully posted!", postedTweets: result.posted_tweets });
+
+      if (result.posted_tweets && result.posted_tweets.length > 0) {
+        const tweetContent = result.posted_tweets.map((t: {text: string}) => t.text).join(" ");
+        const now = new Date();
+        const formattedDate = now.toISOString().split('T')[0];
+        const newContentItem: PreviousContentItem = {
+          id: result.posted_tweets[0].id,
+          contentSummary: tweetContent.length > 100 ? tweetContent.substring(0, 97) + "..." : tweetContent,
+          platform: "Twitter",
+          dateGenerated: formattedDate,
+          performance: { views: 0, likes: 0, shares: 0 },
+          directLink: `https://x.com/glenomenagabe/status/`,
+          accountName: "Your Account", 
+          accountHandle: "glenomenagabe",
+          avatarUrl: "/buildie-logo-small.png"
+        };
+        setPreviousContent(prevContent => [newContentItem, ...prevContent]);
+        setActiveTab("previousContent");
+        setDidJustPost(true); // Set the flag
+        
+        setTimeout(() => {
+          returnToDashboard();
+          // Reset the flag after returning and a short delay for UI to settle
+          setTimeout(() => setDidJustPost(false), 100); 
+        }, 1500);
+      }
+    } catch (error: any) {
+      console.error("Error posting to Twitter:", error);
+      setTwitterPostResult({ success: false, message: error.message || "An unknown error occurred." });
+    } finally {
+      setIsPostingToTwitter(false);
+    }
+  }, [editableTweetText, setActiveTab, returnToDashboard]);
 
   const handleDoneOrCancelGeneration = useCallback(() => {
-    setIsGenerating(false); // This will update isGeneratingRef.current via its own useEffect
-    setLlmStream([]);
-    setGeneratedContent(null);
-    setCurrentPrompt("");
-    setGenerationError(null); 
-    setIsLlmProcessingComplete(false);
-    setCurrentStepIcon(null);
-    setCurrentStepTitle("");
-    setCurrentStepDetail("");
-  }, []);
+    returnToDashboard();
+    // For cancellation, also reset Twitter post result
+    setTwitterPostResult(null);
+  }, [returnToDashboard]);
 
   const fetchProjectDetails = useCallback(async (currentProjectId: string) => {
     setIsLoadingProject(true);
@@ -705,63 +935,6 @@ export default function DashboardPage() {
       setIsLoadingCommits(false);
     }
   }, [commitsPerPage]); // Added commitsPerPage dependency
-
-  const fetchPreviousContent = useCallback(async (currentProjectId: string) => {
-    if (!currentProjectId) return;
-    console.log(`Fetching previous content for project ID: ${currentProjectId}`);
-    setIsLoadingPreviousContent(true);
-    setPreviousContentError(null);
-    // TODO: Replace with actual API call
-    // Example: const response = await fetch(`/api/projects/${currentProjectId}/previous-content`);
-    // For now, using mock data with a delay
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
-    setPreviousContent([
-      { 
-        id: "1", 
-        contentSummary: "Tweet about new feature X: Enhanced AI suggestions!", 
-        platform: "Twitter", 
-        dateGenerated: "2023-05-15", 
-        performance: { views: 1052, likes: 78, shares: 12 }, 
-        directLink: "https://twitter.com/example/status/1",
-        accountName: "BuildieApp",
-        accountHandle: "Buildie",
-        avatarUrl: "/buildie-logo-small.png" // Assuming you have a small logo
-      },
-      { 
-        id: "2", 
-        contentSummary: "LinkedIn post on Q2 results and future outlook.", 
-        platform: "LinkedIn", 
-        dateGenerated: "2023-05-10", 
-        performance: { views: 876, likes: 120, shares: 25 }, 
-        directLink: "https://linkedin.com/feed/update/urn:li:activity:2",
-        accountName: "BuildieApp",
-        accountHandle: "Buildie",
-        avatarUrl: "/buildie-logo-small.png"
-      },
-      { 
-        id: "3", 
-        contentSummary: "Blog draft: The future of AI in software development, a deep dive.", 
-        platform: "Blog", 
-        dateGenerated: "2023-05-05", 
-        performance: { views: 1200, likes: 90 }, 
-        directLink: "https://example.com/blog/ai-future",
-        accountName: "Gabe Cohen", // Different author for variety
-        accountHandle: "ga_cohen",
-        // avatarUrl: undefined // Test fallback initials
-      },
-      { 
-        id: "4", 
-        contentSummary: "Short update on Instagram about team expansion.", 
-        platform: "Instagram", 
-        dateGenerated: "2023-05-02", 
-        performance: { likes: 250, shares: 5 },
-        accountName: "BuildieApp",
-        accountHandle: "Buildie",
-        avatarUrl: "/buildie-logo-small.png"
-      },
-    ]);
-    setIsLoadingPreviousContent(false);
-  }, []);
 
   // Effect 0: Handle initial indexing state based on URL
   useEffect(() => {
@@ -935,10 +1108,13 @@ export default function DashboardPage() {
           currentStepTitle={currentStepTitle}
           currentStepDetail={currentStepDetail}
           generatedContent={generatedContent}
+          setGeneratedContent={setGeneratedContent}
           editableTweetText={editableTweetText}
           setEditableTweetText={setEditableTweetText}
           onUseContent={handleUseContent}
           onDoneOrCancel={handleDoneOrCancelGeneration}
+          isPostingToTwitter={isPostingToTwitter}
+          twitterPostResult={twitterPostResult}
         />
       ) : (
         <>
