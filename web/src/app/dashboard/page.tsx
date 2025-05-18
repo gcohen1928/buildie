@@ -4,7 +4,16 @@ import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { LogOut } from 'lucide-react';
+import { LogOut, Loader2 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export default function DashboardPage() {
   const { user, isLoading, logout } = useAuth();
@@ -19,8 +28,7 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <p className="text-lg text-gray-700 dark:text-gray-300">Loading dashboard...</p>
-        {/* You could add a spinner here */}
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
@@ -37,28 +45,33 @@ export default function DashboardPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="bg-white dark:bg-gray-800 shadow-2xl rounded-xl p-8 md:p-12 w-full max-w-lg text-center"
+        className="w-full max-w-lg"
       >
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-          Dashboard
-        </h1>
-        <p className="text-lg text-gray-700 dark:text-gray-300 mb-8">
-          Welcome, <span className="font-semibold text-indigo-600 dark:text-indigo-400">{user.email}</span>!
-        </p>
-        
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6 mb-6">
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Your Info</h2>
-          <p className="text-md text-gray-600 dark:text-gray-400">User ID: {user.id}</p>
-          {/* Add more user details here if available and needed */}
-        </div>
-
-        <button
-          onClick={logout}
-          className="w-full flex items-center justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150"
-        >
-          <LogOut className="mr-2 h-5 w-5" />
-          Logout
-        </button>
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-4xl font-bold">Dashboard</CardTitle>
+            <CardDescription className="text-lg pt-2">
+              Welcome, <span className="font-semibold text-primary">{user.email}</span>!
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border-t border-border pt-6">
+              <h2 className="text-2xl font-semibold text-center mb-4">Your Info</h2>
+              <p className="text-md text-muted-foreground text-center">User ID: {user.id}</p>
+              {/* Add more user details here if available and needed */}
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button
+              onClick={logout}
+              variant="destructive"
+              className="w-full"
+            >
+              <LogOut className="mr-2 h-5 w-5" />
+              Logout
+            </Button>
+          </CardFooter>
+        </Card>
       </motion.div>
     </div>
   );

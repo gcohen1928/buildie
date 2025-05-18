@@ -4,6 +4,17 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, UserPlus, AlertCircle } from 'lucide-react';
 // import { useRouter } from 'next/navigation'; // Uncomment if you want to redirect after signup
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const SignupForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -57,103 +68,109 @@ const SignupForm: React.FC = () => {
   };
 
   return (
-    <motion.form
+    <motion.div // Keep motion.div for animations if desired, or apply to Card
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      onSubmit={handleSubmit}
-      className="space-y-6 max-w-md mx-auto p-8 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+      className="max-w-md mx-auto" // Centering the card
     >
-      <div className="text-center">
-        <UserPlus className="mx-auto h-12 w-12 text-indigo-600 dark:text-indigo-400" />
-        <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">Create your Account</h2>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Get started with Build-in-Public Autopilot.
-        </p>
-      </div>
-      
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Email address
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Mail className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          </div>
-          <input
-            id="email-signup"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="you@example.com"
-          />
-        </div>
-      </div>
+      <Card>
+        <CardHeader className="space-y-1 text-center">
+          <UserPlus className="mx-auto h-12 w-12 text-primary" /> {/* Use theme color */}
+          <CardTitle className="text-3xl font-bold">Create your Account</CardTitle>
+          <CardDescription>
+            Get started with Build-in-Public Autopilot.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email-signup">
+                <Mail className="mr-2 h-4 w-4 inline-block" /> Email address
+              </Label>
+              <Input
+                id="email-signup"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
 
-      <div>
-        <label htmlFor="password-signup" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Password (min. 8 characters)
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Lock className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          </div>
-          <input
-            id="password-signup"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="••••••••"
-          />
-        </div>
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="password-signup">
+                <Lock className="mr-2 h-4 w-4 inline-block" /> Password (min. 8 characters)
+              </Label>
+              <Input
+                id="password-signup"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="••••••••"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
 
-      {/* Optional: Confirm Password Field */}
-      {/* <div> ... مشابه 필드 ... </div> */}
+            {/* Optional: Confirm Password Field - Add if needed, similar to above */}
+            {/*
+            <div className=\"space-y-2\">
+              <Label htmlFor=\"confirm-password-signup\">
+                <Lock className=\"mr-2 h-4 w-4 inline-block\" /> Confirm Password
+              </Label>
+              <Input
+                id=\"confirm-password-signup\"
+                name=\"confirmPassword\"
+                type=\"password\"
+                autoComplete=\"new-password\"
+                placeholder=\"••••••••\"
+                required
+                // value={confirmPassword} 
+                // onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            */}
 
-      {error && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center space-x-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 p-3 rounded-md border border-red-300 dark:border-red-700"
-        >
-          <AlertCircle className="h-5 w-5" />
-          <span>{error}</span>
-        </motion.div>
-      )}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center space-x-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md border border-destructive/30"
+              >
+                <AlertCircle className="h-5 w-5" />
+                <span>{error}</span>
+              </motion.div>
+            )}
 
-      {successMessage && (
-         <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center space-x-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 p-3 rounded-md border border-green-300 dark:border-green-700"
-        >
-          <UserPlus className="h-5 w-5" />
-          <span>{successMessage}</span>
-        </motion.div>
-      )}
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center space-x-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 p-3 rounded-md border border-green-300 dark:border-green-700"
+                // Consider using a success variant if you add Alert component from shadcn
+              >
+                <UserPlus className="h-5 w-5" /> {/* Or CheckCircleIcon */}
+                <span>{successMessage}</span>
+              </motion.div>
+            )}
 
-      <div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-150"
-        >
-          {loading ? 'Creating Account...' : 'Create Account'}
-        </button>
-      </div>
-      <div className="text-sm text-center text-gray-600 dark:text-gray-400">
-        Already have an account? <a href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">Log in</a>
-      </div>
-    </motion.form>
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? 'Creating Account...' : 'Create Account'}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="text-sm text-center">
+          Already have an account?{' '}
+          <Button variant="link" asChild className="p-0 h-auto">
+            <a href="/login">Log in</a>
+          </Button>
+        </CardFooter>
+      </Card>
+    </motion.div>
   );
 };
 
