@@ -35,96 +35,111 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Feature Completed: {feature_name}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   body {{
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
     margin: 0;
-    padding: 0;
-    background-color: #1A1A2E; /* Dark background to match app */
-    color: #DCDCDC; /* Lighter default body text for better overall legibility */
+    padding: 20px;
+    background-color: #17171F; /* Slightly darker, desaturated background */
+    color: #E0E0E0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }}
   .container {{
-    max-width: 600px;
-    margin: 40px auto;
-    background-color: #2A2A3E; /* Slightly lighter panel background */
+    max-width: 580px;
+    margin: 20px auto;
+    background-color: #23232D; /* Panel background - subtle change */
     padding: 0;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-    overflow: hidden; /* Ensures border radius is respected by inner elements */
+    border-radius: 16px; /* Softer, larger radius */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3); /* Softer, more diffuse shadow */
+    overflow: hidden;
   }}
   .header {{
-    background-color: #4A00E0; /* Vibrant purple accent */
+    background: linear-gradient(135deg, #4A00E0 0%, #6E26F5 100%); /* Subtle gradient for the header */
     color: #ffffff;
-    padding: 25px 20px; /* Adjusted padding */
+    padding: 35px 30px;
     text-align: center;
   }}
-  .header .brand-name {{
+  .header .brand-name {
+    font-size: 20px; /* Slightly smaller */
+    font-weight: 600; /* Medium weight */
     color: #FFFFFF;
-    font-size: 22px; /* Ensuring this is parsed correctly */
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    margin-bottom: 10px;
-  }}
+    margin-bottom: 8px;
+    letter-spacing: 0.2px;
+    opacity: 0.9;
+  }
   .header h1 {{
     margin: 0;
-    font-size: 26px; /* Slightly adjusted size */
+    font-size: 28px;
     font-weight: 700;
+    line-height: 1.3;
   }}
   .content {{
-    padding: 30px 35px;
-    line-height: 1.7;
-    color: #F5F5F5; /* Significantly lighter text for main content area */
+    padding: 35px 35px 30px 35px;
+    line-height: 1.65;
+    color: #C5C5D2; /* Softer text color for content */
   }}
   .content p {{
-    margin: 18px 0; /* Slightly increased margin for better readability */
+    margin: 0 0 18px 0;
     font-size: 16px;
-    /* Color will be inherited from .content (#F5F5F5) */
+    font-weight: 400;
   }}
-  .content .feature-name {{
-    font-size: 1.2em;
+  .content p.greeting {{ 
+    font-weight: 500; 
+    font-size: 17px;
+    color: #E0E0E0;
+    margin-bottom: 24px;
+  }}
+  .content .project-name-emphasis {{
     font-weight: 600;
-    color: #BB86FC; /* Lighter purple for emphasis */
+    color: #D0D0DD; /* Emphasize project name slightly */
+  }}
+  .content .feature-name-display {{
+    font-size: 1.3em; /* Make feature name prominent */
+    font-weight: 600;
+    color: #BB86FC; /* Keep purple accent for feature */
     text-align: center;
     display: block;
-    margin: 25px 0; /* Increased vertical margin */
-    padding: 12px; /* Increased padding */
-    background-color: rgba(255, 255, 255, 0.08); /* Slightly more opaque background for better pop */
-    border-radius: 6px;
+    margin: 25px 0 30px 0;
+    padding: 15px 10px;
+    background-color: rgba(74, 0, 224, 0.1); /* Very subtle purple background */
+    border-left: 3px solid #4A00E0;
+    border-radius: 0 4px 4px 0;
   }}
   .button-container {{
     text-align: center;
-    margin-top: 35px;
-    margin-bottom: 25px;
+    margin-top: 30px;
+    margin-bottom: 20px;
   }}
   .button {{
-    background-color: #4A00E0; /* Consistent purple accent */
-    color: #FFFFFF !important; /* Ensuring text is white */
-    padding: 14px 30px;
+    background-color: #5D3FD3; /* A slightly softer, modern purple */
+    color: #FFFFFF !important;
+    padding: 15px 35px;
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: 25px; /* Pill shape */
     font-weight: 600;
     font-size: 16px;
     display: inline-block;
-    transition: background-color 0.2s ease-in-out;
+    transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }}
   .button:hover {{
-    background-color: #5A10F0; /* Slightly lighter purple on hover */
+    background-color: #6E4FF5; /* Lighter on hover */
+    transform: translateY(-1px);
   }}
   .footer {{
     text-align: center;
-    padding: 25px;
-    font-size: 0.9em;
-    color: #BDBDBD; /* Lightened footer text */
-    border-top: 1px solid #3A3A4E; /* Subtle separator line */
-    margin-top: 20px;
+    padding: 25px 30px;
+    font-size: 13px; /* Smaller footer text */
+    color: #8A8A9E; /* Softer footer text color */
+    border-top: 1px solid #30303A; /* Subtle separator */
   }}
   .footer a {{
-    color: #BB86FC; /* Lighter purple for links */
+    color: #A0A0B8; /* Lighter footer links */
     text-decoration: none;
   }}
   .footer a:hover {{
+    color: #BB86FC;
     text-decoration: underline;
   }}
 </style>
@@ -136,9 +151,9 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
       <h1>🎉 Feature Complete!</h1>
     </div>
     <div class="content">
-      <p>Hi there,</p>
-      <p>Amazing news! We've detected that you've just completed a significant feature in your <strong>{project_name}</strong> project:</p>
-      <div class="feature-name"><em>{feature_name}</em></div>
+      <p class="greeting">Hi there,</p>
+      <p>Amazing news! We've detected that you've just completed a significant feature in your <strong class="project-name-emphasis">{project_name}</strong> project:</p>
+      <div class="feature-name-display"><em>{feature_name}</em></div>
       <p>We're already drafting an initial post to help you showcase your hard work. Ready to take a look?</p>
       <div class="button-container">
         <a href="{post_generation_link}" class="button">Review Your Post</a>
