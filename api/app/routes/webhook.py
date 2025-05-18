@@ -125,7 +125,7 @@ async def github_webhook(
             #
             # await send_feature_completion_email(
             #     project_name=push_event.repository.full_name,
-            #     feature_name="<name_of_completed_feature_from_llm>",
+            #     feature_name="GitHub Repository Import and Codebase Indexing Feature",
             #     recipient_email=DESIGNATED_EMAIL_ADDRESS
             # )
             #
