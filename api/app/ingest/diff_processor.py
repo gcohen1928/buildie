@@ -1,6 +1,7 @@
 import httpx # For making HTTP requests to get diff
 import os
 from typing import Dict, Any, Optional, List
+import openai # Import OpenAI library
 
 # Assuming your Pydantic models from webhook.py are accessible or redefined here for type hinting
 # For simplicity, let's assume they are passed as dicts initially
@@ -10,8 +11,16 @@ from ..services import supabase_service # Import the Supabase service
 # Placeholder for LLM utility functions
 # from ..core import llm_utils 
 
-# Environment variables for LLM provider (example)
-# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Environment variables for LLM provider
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if OPENAI_API_KEY:
+    openai.api_key = OPENAI_API_KEY
+else:
+    print("Warning: OPENAI_API_KEY is not set. LLM analysis will be skipped.")
+
+# Recommended: Initialize client outside function if it's to be reused
+# However, for background tasks that might run in separate processes, initializing per call can be safer.
+# client = openai.AsyncOpenAI() # if using openai > v1.0.0
 
 async def get_commit_diff(repo_html_url: str, commit_sha: str) -> Optional[str]:
     """Fetches the diff for a given commit SHA from its .diff URL."""
@@ -29,28 +38,114 @@ async def get_commit_diff(repo_html_url: str, commit_sha: str) -> Optional[str]:
     return None
 
 async def analyze_changes_with_llm(diff_text: str, commit_message: str) -> Dict[str, Any]:
-    """ 
-    Placeholder for LLM analysis to get a summary and feature shipment flag.
     """
-    # TODO: Implement actual LLM calls here
-    # if not OPENAI_API_KEY:
-    #     print("Warning: OPENAI_API_KEY not set. Skipping LLM analysis.")
-    #     return {"summary": "LLM analysis skipped.", "is_feature_shipped": None}
-
-    print("LLM: Simulating change summary generation...")
-    summary = f"Summary based on commit: '{commit_message[:50]}...' and diff length: {len(diff_text)}"
+    Analyzes diff text and commit message using OpenAI to get a summary 
+    and a feature shipment flag.
+    """
+    if not OPENAI_API_KEY:
+        print("LLM analysis skipped: OPENAI_API_KEY not available.")
+        return {"change_summary": "LLM analysis skipped (API key not set).", "is_feature_shipped": None}
     
-    print("LLM: Simulating feature shipment analysis...")
-    # Basic heuristic: if 'feature' or 'feat' is in commit message, or diff is large
-    is_feature = None
-    if diff_text: # Only attempt if diff is available
-        is_feature = "feature" in commit_message.lower() or "feat" in commit_message.lower() or len(diff_text) > 1000 # Arbitrary threshold
+    if not diff_text and not commit_message:
+        return {"change_summary": "Not enough information for analysis.", "is_feature_shipped": None}
 
-    # Example call to a hypothetical LLM utility:
-    # summary = await llm_utils.generate_summary(diff_text, commit_message)
-    # is_feature_shipped = await llm_utils.check_feature_shipped(diff_text, commit_message, summary)
-    
-    return {"change_summary": summary, "is_feature_shipped": is_feature}
+    # Initialize client here if not using a global one (safer for some concurrent/serverless setups)
+    # For openai < v1.0.0, direct calls like openai.ChatCompletion.acreate are used.
+    # For openai >= v1.0.0, you'd use an instance: client = openai.AsyncOpenAI(); await client.chat.completions.create(...)
+    # Assuming older SDK for simplicity or ensure your SDK version matches.
+    # Let's use the newer SDK style for future-proofing.
+    aclient = openai.AsyncOpenAI()
+
+    max_diff_length = 15000  # Max characters of diff to send to avoid exceeding token limits easily
+    truncated_diff = diff_text[:max_diff_length]
+    if len(diff_text) > max_diff_length:
+        truncated_diff += "\n... [diff truncated] ..."
+
+    summary_prompt = f"""
+Review the following code diff and commit message. Provide a concise summary (1-2 sentences) 
+of the main changes. Focus on what was achieved or fixed.
+
+Commit Message: "{commit_message}"
+
+Code Diff:
+```diff
+{truncated_diff}
+```
+
+Summary:"""
+
+    feature_prompt = f"""
+Based on the commit message and code diff, determine if this commit likely represents the completion or 
+significant advancement of a new user-facing feature or a substantial piece of new functionality. 
+Answer with only YES or NO.
+
+Consider these as features: 
+- New API endpoints added
+- Significant UI changes or additions
+- Core functionality implemented for the first time
+
+Do NOT consider these as features if they are standalone changes:
+- Refactoring existing code
+- Minor bug fixes
+- Documentation updates
+- Tests additions/updates
+- Dependency updates
+
+Commit Message: "{commit_message}"
+
+Code Diff:
+```diff
+{truncated_diff}
+```
+
+Is a new feature shipped or significantly advanced? (YES/NO):"""
+
+    change_summary = "Could not generate summary."
+    is_feature_shipped_bool = None
+
+    try:
+        print("LLM: Generating change summary...")
+        summary_response = await aclient.chat.completions.create(
+            model="gpt-3.5-turbo", # Or your preferred model, e.g., gpt-4
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that summarizes code changes."},
+                {"role": "user", "content": summary_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=150
+        )
+        if summary_response.choices and summary_response.choices[0].message:
+            change_summary = summary_response.choices[0].message.content.strip()
+        
+        print("LLM: Analyzing for feature shipment...")
+        feature_response = await aclient.chat.completions.create(
+            model="gpt-3.5-turbo", # Or your preferred model
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that determines if a commit ships a new feature."},
+                {"role": "user", "content": feature_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=10 # Enough for YES/NO
+        )
+        if feature_response.choices and feature_response.choices[0].message:
+            answer = feature_response.choices[0].message.content.strip().upper()
+            if "YES" in answer:
+                is_feature_shipped_bool = True
+            elif "NO" in answer:
+                is_feature_shipped_bool = False
+
+    except openai.APIError as e:
+        print(f"OpenAI API error: {e}")
+        change_summary = "LLM analysis failed (API error)."
+        is_feature_shipped_bool = None
+    except Exception as e:
+        print(f"Error during LLM analysis: {e}")
+        change_summary = f"LLM analysis failed (General error: {type(e).__name__})."
+        is_feature_shipped_bool = None
+    finally:
+        await aclient.close()
+
+    return {"change_summary": change_summary, "is_feature_shipped": is_feature_shipped_bool}
 
 async def process_github_commit_data(
     commit_payload: Dict[str, Any], 

@@ -123,10 +123,10 @@ async def github_webhook(
             # This function would handle fetching diff, LLM calls, and structured data storage
             background_tasks.add_task(
                 process_github_commit_data,
-                commit_payload=commit.model_dump(), # Pass serializable data
-                repository_payload=push_event.repository.model_dump(),
-                compare_url=str(push_event.compare), # Pass the compare URL
-                pusher_payload=push_event.pusher.model_dump()
+                commit_payload=commit.model_dump(mode='json'), # Ensure JSON serializable
+                repository_payload=push_event.repository.model_dump(mode='json'), # Ensure JSON serializable
+                compare_url=str(push_event.compare),
+                pusher_payload=push_event.pusher.model_dump(mode='json') # Ensure JSON serializable
             )
             
         print(f"Finished initial processing of push event for {repo_name}")
