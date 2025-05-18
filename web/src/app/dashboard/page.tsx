@@ -1446,9 +1446,7 @@ export default function DashboardPage() {
         <>
           <header className="mt-24 md:mt-20 mb-10 md:mb-16 text-center w-full max-w-4xl">
             {/* Project Name Display */}
-            {isLoadingProject && !project && (
-              <Skeleton className="h-12 w-3/4 mx-auto mb-4" />
-            )}
+            
             {!isLoadingProject && !project && !projectError && !projectId && (
                  <h1 className="text-4xl md:text-5xl font-bold text-slate-50 mb-3">
                     Welcome to Buildie! 
