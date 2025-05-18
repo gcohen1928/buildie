@@ -17,8 +17,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Build Something Lovable (Autopilot)",
+  title: "Buildie: Build in Public on Autopilot",
   description: "Your AI-powered build-in-public co-pilot.",
+  icons: {
+    icon: "/buildie.png",
+  },
 };
 
 export default function RootLayout({

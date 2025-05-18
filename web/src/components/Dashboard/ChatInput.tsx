@@ -41,7 +41,7 @@ export default function ChatInput({ onSendMessage }: ChatInputProps) {
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Ask Buildie to... (e.g., draft a tweet thread about my last commit)"
-        className="flex-grow bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground resize-none overflow-y-hidden leading-tight pb-6 md:pb-8 min-h-[80px] md:min-h-[100px]"
+        className="flex-grow pt-3 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground resize-none overflow-y-hidden leading-tight pb-6 md:pb-8 min-h-[80px] md:min-h-[100px]"
         // rows={1} // min-height and padding will control initial height better
       />
       <div className="flex flex-row items-center justify-between gap-2 w-full"> {/* Changed from flex-col and self-end */}

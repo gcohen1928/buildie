@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"; // For pagination buttons
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Added Tabs
 import { Badge } from "@/components/ui/badge"; // Added Badge
-import { Paperclip, ArrowRight, Globe, Settings2, SearchCode, PenTool, AlertTriangle, Sparkles, Zap, Bot, Wand2, CheckCircle2, Github, DownloadCloud, GitCommit, LayoutDashboard, Loader2, GitFork, ListChecks, FileText, X, PlayCircle, RefreshCw } from "lucide-react"; // Changed PowerPlug to Zap and added X icon, Added PlayCircle, Added RefreshCw
+import { Paperclip, ArrowRight, Globe, Settings2, SearchCode, PenTool, AlertTriangle, Sparkles, Zap, Bot, Wand2, CheckCircle2, Github, DownloadCloud, GitCommit, LayoutDashboard, Loader2, GitFork, ListChecks, FileText, X, PlayCircle, RefreshCw, Maximize2, ExternalLink, Repeat, Eye, EyeOff, MessageSquare, Info, LogOut, PlusCircle, Trash2, Copy, Star, Link as LinkIcon, Clock } from "lucide-react"; // Changed PowerPlug to Zap and added X icon, Added PlayCircle, Added RefreshCw, Added Maximize2, Added ExternalLink, Added Repeat, Added Eye, Added EyeOff, Added MessageSquare, Added Info, Added LogOut, Added PlusCircle, Added Trash2, Added Copy, Added Star, Added LinkIcon, Added Clock
 import React from 'react'; // Ensure React is imported for JSX types
 import { motion, AnimatePresence } from 'framer-motion'; // Import motion and AnimatePresence
 
@@ -111,6 +111,7 @@ interface GenerationInProgressViewProps {
   // Add new props for HITL
   setLlmStream: (updater: (prevStream: string[]) => string[]) => void;
   setTwitterPostResult: (result: { success: boolean; message: string; tweetUrl?: string; postedTweets?: Array<{id: string; text: string; url: string}> } | null) => void;
+  project: ProjectData | null; // Added project prop
 }
 
 // Define GenerationInProgressView outside DashboardPage and wrap with React.memo
@@ -133,7 +134,8 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
     twitterPostResult,
     // Destructure new props
     setLlmStream,
-    setTwitterPostResult
+    setTwitterPostResult,
+    project // Destructure project prop
   }
 ) => {
   console.log("%%% GenerationInProgressView render %%%", currentStepTitle, currentStepDetail);
@@ -199,7 +201,55 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
 
   return (
     <>
-      <div className="w-full max-w-4xl lg:max-w-6xl p-4 md:p-6 bg-slate-800/50 backdrop-blur-md rounded-lg shadow-2xl mt-10 mb-2c animate-fadeIn ring-1 ring-purple-500/30">
+      <div className="w-full max-w-4xl lg:max-w-6xl p-4 mt-24 md:p-6 bg-slate-800/50 backdrop-blur-md rounded-lg shadow-2xl mt-10 mb-2c animate-fadeIn ring-1 ring-purple-500/30">
+        {/* Project Header Inside Card */}
+        {project && (
+          <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-700">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wider">Project</p>
+              <a 
+                href={project.html_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-l mt-2 text-slate-100 hover:text-purple-400 transition-colors duration-150 flex items-center"
+              >
+                <Github size={18} className="mr-2 flex-shrink-0" />
+                gcohen1928/{project.name}
+              </a>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Status</p>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={isLlmProcessingComplete ? (generationError ? "error" : "ready") : "processing"}
+                  initial={{ opacity: 0, y: -10, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                >
+                  {isLlmProcessingComplete ? (
+                    generationError ? (
+                      <Badge variant="destructive" className="text-sm px-3 py-1.5 shadow-md bg-red-500/20 border-red-500/50 text-red-300">
+                        <AlertTriangle size={14} className="mr-1.5" />
+                        Error
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-sm px-3 py-1.5 my-2 shadow-md bg-green-500/20 border-green-500/50 text-green-300">
+                        <CheckCircle2 size={14} className="mr-1.5" />
+                        Content Ready
+                      </Badge>
+                    )
+                  ) : (
+                    <Badge variant="secondary" className="text-sm px-3 py-1.5 my-2 shadow-md bg-sky-500/20 border-sky-500/50 text-sky-300 animate-pulse">
+                      Processing...
+                    </Badge>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+        
         <div className="flex flex-col md:flex-row gap-6 h-full">
           {/* Left sidebar (Agent Interaction) */}
           <div className="w-full md:w-1/3 p-4">
@@ -330,7 +380,7 @@ const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
                     <AnimatePresence mode="wait">
                       <motion.div // Using motion.div as a wrapper for the paragraph to handle key and animations for detail changes
                         key={currentStepDetail} // Animate when detail text changes
-                        className="flex-1 flex flex-col items-center justify-start w-full pt-1" // ADDED: flex-1, flex, flex-col, items-center, justify-start, pt-1 to AnimatePresence wrapper conceptually (applied to motion.div)
+                        className="flex-1 flex flex-col items-center justify-center w-full pt-1" // ADDED: flex-1, flex, flex-col, items-center, justify-start, pt-1 to AnimatePresence wrapper conceptually (applied to motion.div)
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -5, transition: { duration: 0.2 } }} // Smooth fade out for old text
@@ -1292,48 +1342,7 @@ export default function DashboardPage() {
     >
       {isGenerating ? (
         <>
-          {/* New Context Header Bar */}
-          <div className="w-full max-w-4xl lg:max-w-6xl mt-12 p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Project</p>
-                <h3 className="text-xl font-semibold text-slate-100">
-                  {project?.name || <Skeleton className="h-6 w-48 inline-block bg-slate-700" />}
-                </h3>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Status</p>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={isLlmProcessingComplete ? (generationError ? "error" : "ready") : "processing"}
-                    initial={{ opacity: 0, y: -10, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                  >
-                    {isLlmProcessingComplete ? (
-                      generationError ? (
-                        <Badge variant="destructive" className="text-sm px-3 py-1.5 shadow-md bg-red-500/20 border-red-500/50 text-red-300">
-                          <AlertTriangle size={14} className="mr-1.5" />
-                          Error
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-sm px-3 py-1.5 shadow-md bg-green-500/20 border-green-500/50 text-green-300">
-                          <CheckCircle2 size={14} className="mr-1.5" />
-                          Content Ready
-                        </Badge>
-                      )
-                    ) : (
-                      <Badge variant="secondary" className="text-sm px-3 py-1.5 shadow-md bg-sky-500/20 border-sky-500/50 text-sky-300 animate-pulse">
-                        Processing...
-                      </Badge>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </div>
-          </div>
-
+          {/* The old header block that was here is now removed. */}
           <GenerationInProgressView 
             currentPrompt={currentPrompt}
             llmStream={llmStream}
@@ -1353,6 +1362,7 @@ export default function DashboardPage() {
             // Pass new props
             setLlmStream={setLlmStream}
             setTwitterPostResult={setTwitterPostResult}
+            project={project} // Pass project data
           />
 
           {/* Render Tabs below GenerationInProgressView if project exists */}
@@ -1434,7 +1444,7 @@ export default function DashboardPage() {
         </>
       ) : (
         <>
-          <header className="mt-12 md:mt-20 mb-10 md:mb-16 text-center w-full max-w-4xl">
+          <header className="mt-24 md:mt-20 mb-10 md:mb-16 text-center w-full max-w-4xl">
             {/* Project Name Display */}
             {isLoadingProject && !project && (
               <Skeleton className="h-12 w-3/4 mx-auto mb-4" />
@@ -1448,9 +1458,10 @@ export default function DashboardPage() {
               <p className="text-red-500 text-lg">Error: {projectError}</p>
             )}
             
-            <h1 className="text-5xl md:text-6xl font-bold text-slate-50 mb-4">
+            <h1 className="text-5xl md:text-6xl font-bold text-slate-50 mb-4 mt-4">
+              <span className="text-slate-400">Share with </span>
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500">
-                Buildie
+                 Buildie
               </span>
             </h1>
             

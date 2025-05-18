@@ -77,7 +77,7 @@ export default async function ProjectsPage() {
   return (
     <div className="min-h-screen text-foreground font-sans flex flex-col items-center p-4 md:p-8 bg-black bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),rgba(255,255,255,0))] pt-16 md:pt-24">
       <div className="w-full max-w-7xl">
-        <div className="flex justify-between items-center mb-10">
+        <div className="flex justify-between items-center my-10">
           <h1 className="text-3xl md:text-4xl font-bold text-slate-50">Your Projects</h1>
           <Button asChild className="bg-sky-600 hover:bg-sky-700 text-white py-2.5 px-5 rounded-lg text-sm font-semibold">
             <Link href="/projects/new">
