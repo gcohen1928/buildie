@@ -223,7 +223,7 @@ async def process_github_commit_data(
         # REMOVE/REVERT this block for production to only send emails for actual completed features.
         if not completed_feature_name:
             commit_id_short = commit_payload.get('id', 'unknown_commit')[:7]
-            completed_feature_name = f"Test Feature (from commit {commit_id_short})" # Default for testing
+            completed_feature_name = f"GitHub Repository Import and Codebase Indexing Feature (commit: {commit_id_short})" # Default for testing
             print(f"LLM (placeholder) did not identify a completed feature. Using default '{completed_feature_name}' for email testing.")
         else:
             print(f"Feature '{completed_feature_name}' deemed complete by LLM (placeholder) for project {project_full_name}.")
