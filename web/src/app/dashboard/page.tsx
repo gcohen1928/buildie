@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import ChatInput from '@/components/Dashboard/ChatInput';
 import CommitHistoryTable, { Commit } from '@/components/Dashboard/CommitHistoryTable';
 import { Skeleton } from "@/components/ui/skeleton"; // For loading state
 import { Button } from "@/components/ui/button"; // For pagination buttons
+import { Textarea } from "@/components/ui/textarea";
+import { Paperclip, ArrowRight, Globe, Settings2, SearchCode, PenTool, AlertTriangle, Sparkles, Zap, Bot, Wand2, CheckCircle2 } from "lucide-react"; // Changed PowerPlug to Zap
+import React from 'react'; // Ensure React is imported for JSX types
+import { motion } from 'framer-motion'; // Import motion
 
 // Type for project data fetched from API
 interface ProjectData {
@@ -32,9 +36,188 @@ interface ApiCommitResponse {
   total_commits: number;
 }
 
+// Props for GenerationInProgressView
+interface GenerationInProgressViewProps {
+  currentPrompt: string;
+  llmStream: string[];
+  isLlmProcessingComplete: boolean;
+  generationError: string | null;
+  currentProgressIcon: React.ReactNode | null;
+  currentProgressText: string;
+  generatedContent: string[] | null;
+  editableTweetText: string;
+  setEditableTweetText: (text: string) => void;
+  onUseContent: () => void;
+  onDoneOrCancel: () => void;
+}
+
+// Define GenerationInProgressView outside DashboardPage and wrap with React.memo
+const GenerationInProgressView = React.memo<GenerationInProgressViewProps>((
+  { 
+    currentPrompt, 
+    llmStream, 
+    isLlmProcessingComplete, 
+    generationError, 
+    currentProgressIcon, 
+    currentProgressText, 
+    generatedContent,
+    editableTweetText,
+    setEditableTweetText,
+    onUseContent,
+    onDoneOrCancel
+  }
+) => {
+  console.log("%%% GenerationInProgressView render %%%");
+  return (
+    <div className="w-full max-w-4xl lg:max-w-6xl p-6 md:p-8 bg-slate-800/50 backdrop-blur-md rounded-lg shadow-2xl mt-16 mb-16 animate-fadeIn ring-1 ring-purple-500/30">
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Left sidebar (Agent Interaction) */}
+        <div className="w-full md:w-1/3 p-4 border border-slate-700 rounded-lg bg-slate-800/70">
+          <h3 className="text-xl font-semibold text-slate-100 mb-4">Agent Interaction</h3>
+          <div className="text-sm text-slate-300 mb-2">Your prompt:</div>
+          <div className="p-3 mb-4 bg-slate-700 rounded text-slate-200 text-sm whitespace-pre-wrap break-words ring-1 ring-slate-600">
+            {currentPrompt}
+          </div>
+          <div className="text-sm text-slate-300 mt-4 mb-2">Agent Log:</div>
+          <div className="h-48 overflow-y-auto p-3 bg-slate-900/70 rounded ring-1 ring-slate-700 text-xs text-slate-400 space-y-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-900/70">
+            {llmStream.map((log, index) => (
+              <div key={index} className="whitespace-pre-wrap break-words">{log}</div>
+            ))}
+            {llmStream.length === 0 && (
+              <div className="text-slate-500 italic">Log will appear here...</div>
+            )}
+          </div>
+        </div>
+
+        {/* Main content area (Progress) */}
+        <div className="w-full md:w-2/3 p-4">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl md:text-3xl font-semibold text-slate-100">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">
+                {isLlmProcessingComplete ? (generationError ? "Generation Failed" : "Content Ready!") : "Buildie is Working..."}
+              </span>
+            </h2>
+            {/* Icon next to title based on state */}
+            {!isLlmProcessingComplete && currentProgressIcon ? (
+              <div className="animate-pulse">{currentProgressIcon}</div>
+            ) : isLlmProcessingComplete && generationError ? (
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            ) : isLlmProcessingComplete && !generationError ? (
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            ) : null}
+          </div>
+
+          {/* Main Progress Indicator */}
+          {!isLlmProcessingComplete && (
+            <motion.div
+              className="flex flex-col items-center justify-center mb-8 p-4 bg-slate-700/30 rounded-lg h-40 md:h-48 ring-1 ring-slate-600"
+              initial={{ opacity: 0.8 }}
+              animate={{ opacity: 1 }}
+            >
+              {currentProgressIcon && (
+                <motion.div
+                  className="mb-3"
+                  animate={{
+                    opacity: [0.6, 1, 0.6],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                >
+                  {currentProgressIcon}
+                </motion.div>
+              )}
+              <motion.p
+                className="text-lg text-slate-300 font-medium"
+                animate={{
+                  opacity: [0.7, 1, 0.7],
+                }}
+                transition={{
+                  duration: 2.2, 
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
+                {currentProgressText}
+              </motion.p>
+            </motion.div>
+          )}
+          
+          {/* Generated Post Preview (X-like) - Re-integrating */}
+          {isLlmProcessingComplete && (
+            <motion.div 
+              className="mt-8 animate-fadeIn" // Added animate-fadeIn from Framer Motion if preferred
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <h3 className="text-xl font-semibold text-slate-100 mb-4">Generated Post Preview</h3>
+              {generationError ? (
+                <div className="p-4 border border-red-500/50 bg-red-500/10 rounded-lg text-red-400"><AlertTriangle className="inline h-5 w-5 mr-2" />Error: {generationError}</div>
+              ) : generatedContent && generatedContent.length > 0 ? (
+                <div className="p-4 border border-slate-600 rounded-lg bg-black shadow-lg">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      {/* Placeholder for user avatar - ideally from auth context */}
+                      <Skeleton className="h-10 w-10 rounded-full bg-slate-700" /> 
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-1 mb-2">
+                        <span className="font-semibold text-slate-100">Your Name</span> {/* Replace with actual user data */}
+                        <span className="text-sm text-slate-500">@username</span>
+                        <span className="text-sm text-slate-500">· Now</span>
+                      </div>
+                      {/* Displaying tweet thread in a single editable Textarea */}
+                      <Textarea
+                        value={editableTweetText} 
+                        onChange={(e) => {
+                          setEditableTweetText(e.target.value);
+                        }}
+                        className="w-full bg-slate-800 border-slate-700 text-slate-200 text-sm font-mono resize-none focus:ring-purple-500 p-3 rounded min-h-[150px] h-auto"
+                        placeholder="Edit generated content..."
+                      />
+                      <div className="mt-4 flex justify-between items-center">
+                        <div className="flex space-x-5 text-slate-500">
+                          <button aria-label="Comment" className="hover:text-sky-500 flex items-center space-x-1"><Paperclip size={14}/><span>0</span></button> 
+                          <button aria-label="Retweet" className="hover:text-green-500 flex items-center space-x-1"><ArrowRight size={14}/><span>0</span></button> 
+                          <button aria-label="Like" className="hover:text-pink-500 flex items-center space-x-1"><Globe size={14}/><span>0</span></button> 
+                          <button aria-label="Share" className="hover:text-sky-500"><Paperclip size={14}/></button> 
+                        </div>
+                        <Button 
+                          className="bg-sky-500 hover:bg-sky-600 rounded-full px-4 py-1.5 text-sm font-bold text-white"
+                          onClick={onUseContent} 
+                        >
+                          Use This Content
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 border border-slate-700 bg-slate-800/30 rounded-lg text-slate-400 italic">No content generated or an issue occurred.</div>
+              )}
+            </motion.div>
+          )}
+
+          <Button
+            onClick={onDoneOrCancel}
+            className="mt-10 w-full md:w-auto"
+            variant="outline"
+          >
+            {isLlmProcessingComplete ? "Done / New Prompt" : "Cancel & Return to Dashboard"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+});
+GenerationInProgressView.displayName = 'GenerationInProgressView'; // Good practice for debugging
+
 export default function DashboardPage() {
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId");
+  const projectIdFromSearch = searchParams.get("projectId");
 
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
@@ -44,18 +227,31 @@ export default function DashboardPage() {
   const [isLoadingCommits, setIsLoadingCommits] = useState(true);
   const [commitsError, setCommitsError] = useState<string | null>(null);
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [commitsPerPage] = useState(10); // Or make this configurable
+  const [commitsPerPage] = useState(10);
   const [totalCommits, setTotalCommits] = useState(0);
 
-  // State for managing the generation view
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentPrompt, setCurrentPrompt] = useState("");
+  const [llmStream, setLlmStream] = useState<string[]>([]);
+  const [generatedContent, setGeneratedContent] = useState<string[] | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [isLlmProcessingComplete, setIsLlmProcessingComplete] = useState(false);
+  const [editableTweetText, setEditableTweetText] = useState<string>("");
+  const [currentProgressText, setCurrentProgressText] = useState<string>("");
+  const [currentProgressIcon, setCurrentProgressIcon] = useState<React.ReactNode | null>(null);
+
+  const hasAutoTriggeredForFeatureRef = useRef<string | null>(null);
+
+  const [projectId, setProjectId] = useState<string | null>(projectIdFromSearch);
+  useEffect(() => {
+    setProjectId(projectIdFromSearch);
+  }, [projectIdFromSearch]);
 
   const fetchProjectDetails = useCallback(async (currentProjectId: string) => {
     setIsLoadingProject(true);
     setProjectError(null);
-    setProject(null); // Clear previous project details
+    setProject(null);
     console.log(`Fetching project data for ID: ${currentProjectId}`);
     try {
       const res = await fetch(`http://localhost:8000/projects/${currentProjectId}`);
@@ -66,28 +262,23 @@ export default function DashboardPage() {
       const data: ProjectData = await res.json();
       console.log("Project data fetched:", data);
       setProject(data);
-      return data; // Return project data for chaining
+      return data;
     } catch (err: any) {
       console.error("Error fetching project details:", err);
       setProjectError(err.message || "An unknown error occurred while fetching project details.");
       setProject(null);
-      throw err; // Re-throw to stop further processing in the main useEffect
+      throw err;
     } finally {
       setIsLoadingProject(false);
     }
   }, []);
 
-
   const fetchProjectCommits = useCallback(async (currentProjectId: string, page: number) => {
     setIsLoadingCommits(true);
     setCommitsError(null);
-    // Don't clear commits here, allow showing old commits while loading new page if preferred,
-    // or clear them: setCommits([]); 
     console.log(`Fetching commits for project ID: ${currentProjectId}, page: ${page}`);
-    
     const skip = (page - 1) * commitsPerPage;
     const limit = commitsPerPage;
-
     try {
       const res = await fetch(`http://localhost:8000/projects/${currentProjectId}/commits?skip=${skip}&limit=${limit}`);
       if (!res.ok) {
@@ -96,48 +287,135 @@ export default function DashboardPage() {
       }
       const commitDataResponse: ApiCommitResponse = await res.json();
       console.log("Commits data fetched:", commitDataResponse);
-
       const formattedCommits: Commit[] = commitDataResponse.commits.map(apiCommit => ({
         id: apiCommit.id,
         message: apiCommit.message || "No commit message",
         author: apiCommit.author_name || "Unknown Author",
-        avatarUrl: `https://avatars.githubusercontent.com/u/1?s=40&v=4`, // Placeholder avatar
+        avatarUrl: `https://avatars.githubusercontent.com/u/1?s=40&v=4`,
         date: new Date(apiCommit.commit_timestamp).toLocaleDateString(),
         sha: apiCommit.commit_sha.substring(0, 7),
-        verified: false, // Placeholder
+        verified: false,
       }));
       setCommits(formattedCommits);
       setTotalCommits(commitDataResponse.total_commits);
     } catch (err: any) {
       console.error("Error fetching commits:", err);
       setCommitsError(err.message || "An unknown error occurred while fetching commits.");
-      setCommits([]); // Clear commits on error
+      setCommits([]);
       setTotalCommits(0);
     } finally {
       setIsLoadingCommits(false);
     }
-  }, [commitsPerPage]); // Added commitsPerPage dependency
+  }, [commitsPerPage]);
+
+  const handleSendMessage = useCallback(async (message: string) => {
+    if (!projectId) {
+      console.error("No project ID available to send message.");
+      setGenerationError("Project ID is missing. Cannot generate content.");
+      setCurrentProgressText("Error: Project ID missing");
+      setCurrentProgressIcon(<AlertTriangle className="h-6 w-6 text-red-500" />);
+      return;
+    }
+    console.log("Message submitted to dashboard:", message, "for project:", projectId);
+    setIsGenerating(true);
+    setCurrentPrompt(message);
+    setLlmStream(["Agent session started..."]);
+    setGeneratedContent(null);
+    setGenerationError(null);
+    setIsLlmProcessingComplete(false);
+
+    const setProgress = (text: string, icon: React.ReactNode) => {
+      setCurrentProgressText(text);
+      setCurrentProgressIcon(icon);
+      setLlmStream(prev => [...prev, text]);
+    };
+
+    try {
+      setProgress("Initializing Agent...", <Settings2 className="h-6 w-6 text-purple-400 animate-spin-slow" />);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const requestBody = { project_id: projectId, commits: [], user_prompt: message };
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setProgress("Connecting to Buildie Service...", <Zap className="h-6 w-6 text-purple-400 animate-pulse" />);
+      setLlmStream(prev => [...prev, `📞 Calling generation service at ${apiUrl}/api/generate/demo`]);
+      const response = await fetch(`${apiUrl}/api/generate/demo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Unknown API error" }));
+        setProgress("API Error Occurred", <AlertTriangle className="h-6 w-6 text-red-500" />);
+        throw new Error(errorData.detail || `API Error: ${response.status} ${response.statusText}`);
+      }
+      setProgress("Processing Agent Response...", <Wand2 className="h-6 w-6 text-purple-400 animate-pulse" />); 
+      const result = await response.json();
+      setLlmStream(prev => [...prev, "✅ Agent responded! Formatting content..."]);
+      if (result.tweet_thread && Array.isArray(result.tweet_thread)) {
+        setGeneratedContent(result.tweet_thread);
+        setEditableTweetText(result.tweet_thread.join("\n\n---\n\n"));
+      } else {
+        const errorMsg = "Error: Received unexpected content format from agent.";
+        setGeneratedContent([errorMsg]);
+        setEditableTweetText(errorMsg);
+        console.warn("Unexpected tweet_thread format:", result);
+      }
+      setIsLlmProcessingComplete(true);
+      setCurrentProgressText("Content Ready!");
+      setCurrentProgressIcon(<CheckCircle2 className="h-6 w-6 text-green-500" />); 
+    } catch (error: any) {
+      console.error("Error calling generation API:", error);
+      setGenerationError(error.message || "Failed to generate content.");
+      setCurrentProgressText("Generation Failed");
+      setCurrentProgressIcon(<AlertTriangle className="h-6 w-6 text-red-500" />);
+      const errorMsg = `Error: ${error.message || "Failed to generate content."}`;
+      setGeneratedContent([errorMsg]);
+      setEditableTweetText(errorMsg);
+      setIsLlmProcessingComplete(true); 
+    }
+  }, [projectId]);
 
   useEffect(() => {
+    const currentFeatureQueryParam = searchParams.get("feature");
+
     if (projectId) {
-      // Reset states for new project ID
-      setIsGenerating(false); // Ensure we are not in generation mode when project changes
-      setCurrentPage(1); // Reset to first page for new project
+      setIsGenerating(false);
+      setCurrentPage(1);
       setCommits([]);
       setTotalCommits(0);
       
+      const uniqueTriggerKey = `${projectId}_${currentFeatureQueryParam}`;
+      if (hasAutoTriggeredForFeatureRef.current && hasAutoTriggeredForFeatureRef.current !== uniqueTriggerKey) {
+        hasAutoTriggeredForFeatureRef.current = null;
+      }
+      
       fetchProjectDetails(projectId)
         .then((fetchedProject) => {
-          if (fetchedProject) { // Only fetch commits if project details were successful
-            fetchProjectCommits(fetchedProject.id, 1); // Fetch first page of commits
+          if (fetchedProject) {
+            fetchProjectCommits(fetchedProject.id, 1);
+            if (currentFeatureQueryParam && !isGenerating && hasAutoTriggeredForFeatureRef.current !== uniqueTriggerKey) {
+              hasAutoTriggeredForFeatureRef.current = uniqueTriggerKey;
+              const decodedFeatureName = decodeURIComponent(currentFeatureQueryParam);
+              let baseFeatureName = decodedFeatureName;
+              const commitShaRegex = /\(from commit ([a-f0-9]{7})\)$/i;
+              const match = decodedFeatureName.match(commitShaRegex);
+              if (match && match[1]) {
+                baseFeatureName = decodedFeatureName.replace(commitShaRegex, "").trim();
+                console.log(`Feature param: Extracted base feature name "${baseFeatureName}"`);
+              } else {
+                console.log(`Feature param: Using full feature name "${decodedFeatureName}", no specific commit SHA found in standard format.`);
+              }
+              const prompt = `Generate a promotional post about the recently completed feature: "${baseFeatureName}".`;
+              console.log(`Auto-triggering generation for project ${projectId}, feature: "${baseFeatureName}" with prompt: "${prompt}"`);
+              handleSendMessage(prompt);
+            }
           }
         })
         .catch(() => {
-          // Errors are handled within fetchProjectDetails,
-          // just preventing unhandled promise rejection here
           setCommits([]);
           setTotalCommits(0);
-          setIsLoadingCommits(false); // Ensure loading state is cleared
+          setIsLoadingCommits(false);
+          hasAutoTriggeredForFeatureRef.current = null;
         });
     } else {
       console.log("No project ID in URL.");
@@ -148,17 +426,9 @@ export default function DashboardPage() {
       setIsLoadingCommits(false);
       setProjectError(null);
       setCommitsError(null);
+      hasAutoTriggeredForFeatureRef.current = null;
     }
-  }, [projectId, fetchProjectDetails, fetchProjectCommits]); // fetchProjectCommits added
-
-  // Effect for handling page changes
-  useEffect(() => {
-    if (projectId && project && !isGenerating) { // Only fetch if not generating
-      fetchProjectCommits(projectId, currentPage);
-    }
-    // Intentionally not adding `project` to dependencies to avoid re-fetch if project object reference changes but ID remains same.
-    // `projectId` and `currentPage` are the main drivers for re-fetching commits.
-  }, [projectId, currentPage, fetchProjectCommits, project, isGenerating]); // Added project and isGenerating
+  }, [projectId, searchParams, fetchProjectDetails, fetchProjectCommits, isGenerating, handleSendMessage]);
 
   const handleNextPage = () => {
     if (currentPage * commitsPerPage < totalCommits) {
@@ -172,117 +442,31 @@ export default function DashboardPage() {
     }
   };
   
-  const handleSendMessage = (message: string) => {
-    console.log("Message submitted to dashboard:", message);
-    setIsGenerating(true);
-    // TODO: Here you would typically make an API call to your backend
-    // to start the LLM generation process with the given message.
-    // For now, we just switch the view.
-  };
-  
   const isLoading = isLoadingProject || (project && isLoadingCommits);
   const totalPages = Math.ceil(totalCommits / commitsPerPage);
 
-  // Placeholder for the new Generation In Progress View
-  const GenerationInProgressView = () => (
-    <div className="w-full max-w-4xl lg:max-w-6xl p-6 md:p-8 bg-slate-800/50 backdrop-blur-md rounded-lg shadow-2xl mt-16 mb-16 animate-fadeIn ring-1 ring-purple-500/30">
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Left sidebar (chat-like) */}
-        <div className="w-full md:w-1/3 p-4 border border-slate-700 rounded-lg bg-slate-800/70">
-          <h3 className="text-xl font-semibold text-slate-100 mb-4">Agent Interaction</h3>
-          <div className="text-sm text-slate-300 mb-2">Your prompt:</div>
-          <div className="p-2 mb-4 bg-slate-700 rounded text-slate-200 text-sm">
-            "Create a tweet about the new feature X." {/* Placeholder for actual prompt */}
-          </div>
-          <div className="text-sm text-slate-300 mb-2">Chat History:</div>
-          <div className="h-48 md:h-64 bg-slate-900/50 rounded p-2 overflow-y-auto text-xs text-slate-400">
-            {/* Chat messages will go here */}
-            <p>&gt; User: Create a tweet...</p>
-            <p>&gt; Agent: Understood. Analyzing context...</p>
-          </div>
-        </div>
+  console.log("##### DashboardPage render, isGenerating state:", isGenerating);
 
-        {/* Main content area (LLM stream + tweet preview) */}
-        <div className="w-full md:w-2/3 p-4">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl md:text-3xl font-semibold text-slate-100">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">
-                Buildie is Working...
-              </span>
-            </h2>
-            <svg className="animate-spin h-8 w-8 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          </div>
+  const handleUseContent = useCallback(() => {
+    const updatedContentArray = editableTweetText.split("\n\n---\n\n");
+    setGeneratedContent(updatedContentArray); // Sync back to the main state
+    console.log("Using content (array):", updatedContentArray);
+    console.log("Original editable text:", editableTweetText);
+    // Proceed with using updatedContentArray (e.g., save, post, etc.)
+    // For now, just logging and ensuring the state is updated.
+  }, [editableTweetText]);
 
-          {/* LLM Stream of Thought */}
-          <div className="mb-8 p-4 bg-slate-700/50 rounded-lg h-40 md:h-48 overflow-y-auto ring-1 ring-slate-600">
-            <p className="text-sm text-slate-300 font-mono">[LOG] Initializing agent...</p>
-            <p className="text-sm text-slate-300 font-mono mt-1">&gt; Analyzing commit data for project: {project?.name || 'current project'}...</p>
-            <p className="text-sm text-slate-300 font-mono mt-1">&gt; Identifying key changes and messages...</p>
-            <p className="text-sm text-slate-300 font-mono mt-1">&gt; Drafting tweet content based on findings...</p>
-            <p className="text-sm text-slate-300 font-mono mt-1">&gt; Applying tone and style guidelines...</p>
-            <p className="text-sm text-slate-300 font-mono mt-1">[LOG] Content generation in progress...</p>
-          </div>
-
-          {/* Tweet Preview (X-like) - Placeholder */}
-          <h3 className="text-xl font-semibold text-slate-200 mb-3">Generated Post Preview</h3>
-          <div className="p-4 border border-slate-600 rounded-lg bg-black shadow-lg"> {/* Mimic X dark theme more closely */}
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0">
-                <Skeleton className="h-10 w-10 rounded-full bg-slate-700" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center space-x-1">
-                  <span className="font-semibold text-slate-100">Your Name</span> {/* Replace with actual user data */}
-                  <span className="text-sm text-slate-500">@username</span>
-                  <span className="text-sm text-slate-500">· Now</span>
-                </div>
-                <div className="mt-2 text-slate-200 whitespace-pre-wrap">
-                  Excited to announce the launch of our new feature on {project?.name || 'the project'}! We've been working hard to bring you X, Y, and Z improvements. Check it out! 🚀
-                  <br /><br />
-                  #buildinpublic #{project?.name?.replace(/\\s+/g, '').toLowerCase() || 'dev'} #innovation
-                </div>
-                <div className="mt-4 flex justify-between items-center">
-                  <div className="flex space-x-5 text-slate-500">
-                    {/* Icons should ideally be SVGs for better control */}
-                    <button aria-label="Comment" className="hover:text-sky-500">💬 12</button>
-                    <button aria-label="Retweet" className="hover:text-green-500">🔁 34</button>
-                    <button aria-label="Like" className="hover:text-pink-500">❤️ 105</button>
-                    <button aria-label="Share" className="hover:text-sky-500">🔗</button>
-                  </div>
-                  <Button className="bg-sky-500 hover:bg-sky-600 rounded-full px-4 py-1.5 text-sm font-bold text-white">Post</Button>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <Button onClick={() => setIsGenerating(false)} className="mt-10 w-full md:w-auto" variant="outline">
-            Cancel & Return to Dashboard
-          </Button>
-        </div>
-      </div>
-      
-      {/* Commit history could be a collapsible section here or a tab */}
-      {project && (
-        <div className="mt-8 pt-6 border-t border-slate-700">
-          <h4 className="text-lg font-semibold text-slate-200 mb-3">Recent Project Activity (Condensed)</h4>
-          {isLoadingCommits && Array.from({ length: 3 }).map((_, i) => <Skeleton key={`condensed-commit-skeleton-${i}`} className="h-6 w-full mt-2 mb-1 rounded bg-slate-700/50" />)}
-          {!isLoadingCommits && commits.slice(0, 3).map(commit => (
-            <div key={commit.id} className="text-xs text-slate-400 p-2 bg-slate-700/30 rounded mb-1">
-              <strong>{commit.sha}</strong>: {commit.message.substring(0, 60)}... by {commit.author} on {commit.date}
-            </div>
-          ))}
-          {!isLoadingCommits && commits.length === 0 && <p className="text-xs text-slate-500">No recent commits to display here.</p>}
-        </div>
-      )}
-    </div>
-  );
-
-  // Basic fadeIn animation definition (ensure your tailwind.config.js or global CSS has this)
-  // For Tailwind, in tailwind.config.js:
-  // theme: { extend: { keyframes: { fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } } }, animation: { fadeIn: 'fadeIn 0.5s ease-out' } } }
+  const handleDoneOrCancelGeneration = useCallback(() => {
+    setIsGenerating(false);
+    setLlmStream([]);
+    setGeneratedContent(null);
+    setCurrentPrompt("");
+    setGenerationError(null); 
+    setIsLlmProcessingComplete(false);
+    setCurrentProgressText(""); 
+    setCurrentProgressIcon(null); 
+    setEditableTweetText(""); // Reset editable text
+  }, []);
 
   return (
     <div className="min-h-screen text-foreground font-sans flex flex-col items-center pt-12 md:pt-16 p-4 md:p-6 
@@ -290,7 +474,19 @@ export default function DashboardPage() {
                     bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),rgba(255,255,255,0))]"
     >
       {isGenerating ? (
-        <GenerationInProgressView />
+        <GenerationInProgressView 
+          currentPrompt={currentPrompt}
+          llmStream={llmStream}
+          isLlmProcessingComplete={isLlmProcessingComplete}
+          generationError={generationError}
+          currentProgressIcon={currentProgressIcon}
+          currentProgressText={currentProgressText}
+          generatedContent={generatedContent} // This is string[] | null
+          editableTweetText={editableTweetText}
+          setEditableTweetText={setEditableTweetText} // Pass the setter directly
+          onUseContent={handleUseContent}
+          onDoneOrCancel={handleDoneOrCancelGeneration}
+        />
       ) : (
         <>
           <header className="mt-12 md:mt-20 mb-10 md:mb-16 text-center w-full max-w-4xl">
