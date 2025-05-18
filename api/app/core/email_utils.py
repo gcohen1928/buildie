@@ -41,7 +41,7 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     margin: 0;
     padding: 0;
     background-color: #1A1A2E; /* Dark background to match app */
-    color: #E0E0E0; /* Light text for contrast */
+    color: #DCDCDC; /* Lighter default body text for better overall legibility */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }}
@@ -68,10 +68,12 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
   .content {{
     padding: 30px 35px;
     line-height: 1.7;
+    color: #F5F5F5; /* Significantly lighter text for main content area */
   }}
   .content p {{
-    margin: 15px 0;
+    margin: 18px 0; /* Slightly increased margin for better readability */
     font-size: 16px;
+    /* Color will be inherited from .content (#F5F5F5) */
   }}
   .content .feature-name {{
     font-size: 1.2em;
@@ -79,9 +81,9 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     color: #BB86FC; /* Lighter purple for emphasis */
     text-align: center;
     display: block;
-    margin: 20px 0;
-    padding: 10px;
-    background-color: rgba(255, 255, 255, 0.05);
+    margin: 25px 0; /* Increased vertical margin */
+    padding: 12px; /* Increased padding */
+    background-color: rgba(255, 255, 255, 0.08); /* Slightly more opaque background for better pop */
     border-radius: 6px;
   }}
   .button-container {{
@@ -107,7 +109,7 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     text-align: center;
     padding: 25px;
     font-size: 0.9em;
-    color: #A0A0A0; /* Softer grey for footer text */
+    color: #BDBDBD; /* Lightened footer text */
     border-top: 1px solid #3A3A4E; /* Subtle separator line */
     margin-top: 20px;
   }}
