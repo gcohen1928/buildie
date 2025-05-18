@@ -1,7 +1,8 @@
 import httpx # For making HTTP requests to get diff
 import os
 from typing import Dict, Any, Optional, List
-import openai # Import OpenAI library
+# import openai # OpenAI no longer needed
+import uuid
 
 # Assuming your Pydantic models from webhook.py are accessible or redefined here for type hinting
 # For simplicity, let's assume they are passed as dicts initially
@@ -11,12 +12,14 @@ from ..services import supabase_service # Import the Supabase service
 # Placeholder for LLM utility functions
 # from ..core import llm_utils 
 
+# Import email sending utility and config from the new core.email_utils module
+from ..core.email_utils import send_feature_completion_email, DESIGNATED_EMAIL_ADDRESS
+
 # Environment variables for LLM provider
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
-else:
-    print("Warning: OPENAI_API_KEY is not set. LLM analysis will be skipped.")
+# if os.getenv("OPENAI_API_KEY"):
+#     openai.api_key = os.getenv("OPENAI_API_KEY")
+# else: # No longer print warning here as the function is removed
+#     print("Warning: OPENAI_API_KEY is not set. LLM analysis will be skipped.")
 
 # Recommended: Initialize client outside function if it's to be reused
 # However, for background tasks that might run in separate processes, initializing per call can be safer.
@@ -37,115 +40,57 @@ async def get_commit_diff(repo_html_url: str, commit_sha: str) -> Optional[str]:
             print(f"Request error fetching diff from {diff_url}: {e}")
     return None
 
-async def analyze_changes_with_llm(diff_text: str, commit_message: str) -> Dict[str, Any]:
+async def determine_feature_completion_and_name_llm(commit_message: str, diff_text: Optional[str]) -> Optional[str]:
     """
-    Analyzes diff text and commit message using OpenAI to get a summary 
-    and a feature shipment flag.
+    (Placeholder) Simulates an LLM call to determine if a commit completes a feature
+    and extracts a name for that feature.
+
+    In a real implementation, this would involve:
+    - Formatting a prompt with the commit message, diff, and potentially other context.
+    - Calling an LLM API (e.g., OpenAI, Anthropic, a local model via Ollama).
+    - Parsing the LLM's response to determine:
+        1. Is the feature considered complete? (boolean)
+        2. If yes, what is a concise name/description for the feature? (string)
+    - Handling potential errors, rate limits, etc.
     """
-    if not OPENAI_API_KEY:
-        print("LLM analysis skipped: OPENAI_API_KEY not available.")
-        return {"change_summary": "LLM analysis skipped (API key not set).", "is_feature_shipped": None}
+    print("\n--- Placeholder LLM Feature Completion Check ---")
+    print(f"Analyzing commit message: \"{commit_message}\"")
+    # print(f"Analyzing diff (first 100 chars): {diff_text[:100] if diff_text else 'No diff'}")
+
+    # Basic heuristic for placeholder - replace with actual LLM call
+    # This is NOT robust.
+    feature_name = None
+    first_line = commit_message.split('\n')[0].lower()
     
-    if not diff_text and not commit_message:
-        return {"change_summary": "Not enough information for analysis.", "is_feature_shipped": None}
+    completion_keywords = ["complete", "finish", "implement", "resolve", "add", "create", "deliver"]
+    feature_prefixes = ["feat:", "feature:", "fix:", "story:", "task:"]
 
-    # Initialize client here if not using a global one (safer for some concurrent/serverless setups)
-    # For openai < v1.0.0, direct calls like openai.ChatCompletion.acreate are used.
-    # For openai >= v1.0.0, you'd use an instance: client = openai.AsyncOpenAI(); await client.chat.completions.create(...)
-    # Assuming older SDK for simplicity or ensure your SDK version matches.
-    # Let's use the newer SDK style for future-proofing.
-    aclient = openai.AsyncOpenAI()
+    is_feature_commit = any(first_line.startswith(prefix) for prefix in feature_prefixes)
+    indicates_completion = any(keyword in first_line for keyword in completion_keywords)
 
-    max_diff_length = 15000  # Max characters of diff to send to avoid exceeding token limits easily
-    truncated_diff = diff_text[:max_diff_length]
-    if len(diff_text) > max_diff_length:
-        truncated_diff += "\n... [diff truncated] ..."
+    if is_feature_commit and indicates_completion:
+        # Try to extract a name (very naive)
+        # e.g., "feat: Implement user login" -> "Implement user login"
+        for prefix in feature_prefixes:
+            if first_line.startswith(prefix):
+                feature_name = commit_message.split('\n')[0][len(prefix):].strip()
+                # Further cleanup very basic completion words from the end if they are there
+                for kw in completion_keywords:
+                    if feature_name.lower().endswith(f" {kw}"):
+                        feature_name = feature_name[:-(len(kw)+1)].strip()
+                    elif feature_name.lower() == kw: # if the message was just "feat: complete"
+                         feature_name = "Completed feature" # fallback
+                break
+        if not feature_name: # If only prefix was found, but no clear name after it
+             feature_name = commit_message.split('\n')[0]
 
-    summary_prompt = f"""
-Review the following code diff and commit message. Provide a concise summary (1-2 sentences) 
-of the main changes. Focus on what was achieved or fixed.
 
-Commit Message: "{commit_message}"
-
-Code Diff:
-```diff
-{truncated_diff}
-```
-
-Summary:"""
-
-    feature_prompt = f"""
-Based on the commit message and code diff, determine if this commit likely represents the completion or 
-significant advancement of a new user-facing feature or a substantial piece of new functionality. 
-Answer with only YES or NO.
-
-Consider these as features: 
-- New API endpoints added
-- Significant UI changes or additions
-- Core functionality implemented for the first time
-
-Do NOT consider these as features if they are standalone changes:
-- Refactoring existing code
-- Minor bug fixes
-- Documentation updates
-- Tests additions/updates
-- Dependency updates
-
-Commit Message: "{commit_message}"
-
-Code Diff:
-```diff
-{truncated_diff}
-```
-
-Is a new feature shipped or significantly advanced? (YES/NO):"""
-
-    change_summary = "Could not generate summary."
-    is_feature_shipped_bool = None
-
-    try:
-        print("LLM: Generating change summary...")
-        summary_response = await aclient.chat.completions.create(
-            model="gpt-3.5-turbo", # Or your preferred model, e.g., gpt-4
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that summarizes code changes."},
-                {"role": "user", "content": summary_prompt}
-            ],
-            temperature=0.3,
-            max_tokens=150
-        )
-        if summary_response.choices and summary_response.choices[0].message:
-            change_summary = summary_response.choices[0].message.content.strip()
-        
-        print("LLM: Analyzing for feature shipment...")
-        feature_response = await aclient.chat.completions.create(
-            model="gpt-3.5-turbo", # Or your preferred model
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that determines if a commit ships a new feature."},
-                {"role": "user", "content": feature_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=10 # Enough for YES/NO
-        )
-        if feature_response.choices and feature_response.choices[0].message:
-            answer = feature_response.choices[0].message.content.strip().upper()
-            if "YES" in answer:
-                is_feature_shipped_bool = True
-            elif "NO" in answer:
-                is_feature_shipped_bool = False
-
-    except openai.APIError as e:
-        print(f"OpenAI API error: {e}")
-        change_summary = "LLM analysis failed (API error)."
-        is_feature_shipped_bool = None
-    except Exception as e:
-        print(f"Error during LLM analysis: {e}")
-        change_summary = f"LLM analysis failed (General error: {type(e).__name__})."
-        is_feature_shipped_bool = None
-    finally:
-        await aclient.close()
-
-    return {"change_summary": change_summary, "is_feature_shipped": is_feature_shipped_bool}
+    if feature_name:
+        print(f"LLM Placeholder: YES, feature '{feature_name}' seems complete.")
+    else:
+        print("LLM Placeholder: NO, feature does not seem complete based on simple heuristics.")
+    print("--- End Placeholder LLM ---")
+    return feature_name
 
 async def process_github_commit_data(
     commit_payload: Dict[str, Any], 
@@ -154,9 +99,8 @@ async def process_github_commit_data(
     compare_url: str # Direct compare URL from the push event
 ):
     """
-    Processes a single commit: fetches diff, (optionally) analyzes with LLM,
-    and stores data in Supabase.
-    This function is intended to be called as a background task.
+    Processes a single commit: fetches diff and stores data in Supabase.
+    LLM analysis has been removed.
     """
     print(f"Processing commit: {commit_payload.get('id')} for repo: {repository_payload.get('full_name')}")
 
@@ -229,15 +173,6 @@ async def process_github_commit_data(
         print(f"Warning: Could not fetch diff for commit {commit_payload['id']}. Proceeding without it.")
         # Decide if you want to store the commit record even if diff is missing.
 
-    # 4. LLM Analysis (Placeholder)
-    llm_analysis_results = {"change_summary": None, "is_feature_shipped": None}
-    if diff_text: # Only run LLM if diff is available
-        llm_analysis_results = await analyze_changes_with_llm(diff_text, commit_payload.get("message", ""))
-    else:
-        # Fallback if no diff: try to get some summary from message only, or mark as not analyzed
-        llm_analysis_results["change_summary"] = f"Summary based on commit message: {commit_payload.get('message', 'N/A')[:100]}... (Diff not available)"
-        llm_analysis_results["is_feature_shipped"] = None # Cannot determine without diff usually
-
     # 5. Prepare list of changed files
     changed_files_data = []
     for status_type in ["added", "removed", "modified"]:
@@ -265,16 +200,50 @@ async def process_github_commit_data(
             pusher_email=pusher_payload.get("email"),
             
             diff_text=diff_text,
-            change_summary=llm_analysis_results.get("change_summary"),
-            is_feature_shipped=llm_analysis_results.get("is_feature_shipped"),
             
             raw_commit_payload=commit_payload, # Store the original commit part of the payload
             # raw_push_event_payload= The full push event might be too large or redundant here if webhook already stored it raw
             changed_files=changed_files_data
         )
         print(f"Successfully processed and stored commit {commit_payload['id']}")
+
+        # After successfully storing commit, check for feature completion
+        # and send email if applicable.
+        commit_message = commit_payload.get("message", "")
+        completed_feature_name = await determine_feature_completion_and_name_llm(commit_message, diff_text)
+
+        # TEMPORARY: Always attempt to send email for testing, using a default feature name if LLM doesn't provide one.
+        # REMOVE/REVERT this block for production to only send emails for actual completed features.
+        project_full_name = repository_payload.get("full_name", "Unknown Project")
+        if not completed_feature_name:
+            commit_id_short = commit_payload.get('id', 'unknown_commit')[:7]
+            completed_feature_name = f"Test Feature (from commit {commit_id_short})" # Default for testing
+            print(f"LLM (placeholder) did not identify a completed feature. Using default '{completed_feature_name}' for email testing.")
+        else:
+            print(f"Feature '{completed_feature_name}' deemed complete by LLM (placeholder) for project {project_full_name}.")
+
+        print(f"Proceeding to send feature completion email for '{completed_feature_name}' in project {project_full_name}.")
+        await send_feature_completion_email(
+            project_name=project_full_name,
+            feature_name=completed_feature_name,
+            recipient_email=DESIGNATED_EMAIL_ADDRESS
+        )
+        # END TEMPORARY BLOCK
+
+        # Original logic (commented out for now during temporary always-send test):
+        # if completed_feature_name:
+        #     project_full_name = repository_payload.get("full_name", "Unknown Project")
+        #     print(f"Feature '{completed_feature_name}' deemed complete by LLM (placeholder) for project {project_full_name}. Triggering email.")
+        #     await send_feature_completion_email(
+        #         project_name=project_full_name,
+        #         feature_name=completed_feature_name,
+        #         recipient_email=DESIGNATED_EMAIL_ADDRESS
+        #     )
+        # else:
+        #     print(f"Commit {commit_payload['id']} did not signify feature completion according to LLM (placeholder).")
+
     except Exception as e:
-        print(f"Error storing commit details for {commit_payload['id']}: {e}")
+        print(f"Error storing commit details for {commit_payload['id']} or during feature completion check/email: {e}")
         # Consider retry mechanisms or dead-letter queues for background tasks
 
 # Example of how you might call this (e.g., from a test or another service)
@@ -297,3 +266,35 @@ async def process_github_commit_data(
 #     # Ensure SUPABASE_URL and SUPABASE_SERVICE_KEY are set in your environment
 #     # You'd also need your Supabase local dev instance running (supabase start)
 #     asyncio.run(process_github_commit_data(mock_commit, mock_repo, mock_pusher, mock_compare_url)) 
+
+# The erroneously added process_historical_commits function is removed from this file.
+# def process_historical_commits(
+#     repo_path: str,
+#     project_name: Optional[str] = None, 
+#     project_full_name: Optional[str] = None, 
+#     project_description: Optional[str] = None, 
+#     project_private: Optional[bool] = False, 
+#     project_owner_user_id: Optional[uuid.UUID] = None,
+#     existing_commit_shas: Optional[set] = None
+# ) -> int:
+#     """
+#     Clones a Git repository, iterates through its commit history,
+#     fetches diffs, (optionally) performs LLM analysis, and stores details in Supabase.
+#     """
+#     # Implementation of process_historical_commits function
+#     # This function is not provided in the original file or the code block
+#     # It's assumed to exist as it's called in the process_github_commit_data function
+#     # The implementation details are not provided in the original file or the code block
+#     # This function should return the number of commits processed
+#     return 0  # Placeholder return, actual implementation needed
+
+#     # Example usage:
+#     # process_historical_commits(
+#     #     repo_path="path/to/your/repo",
+#     #     project_name="My Project",
+#     #     project_full_name="User/My-Project",
+#     #     project_description="A description of the project",
+#     #     project_private=False,
+#     #     project_owner_user_id=uuid.UUID(int=1),
+#     #     existing_commit_shas={"sha1", "sha2"}
+#     # ) 

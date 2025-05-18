@@ -5,7 +5,11 @@ import { Paperclip, Globe, ArrowRight } from 'lucide-react';
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
-export default function ChatInput() {
+interface ChatInputProps {
+  onSendMessage: (message: string) => void;
+}
+
+export default function ChatInput({ onSendMessage }: ChatInputProps) {
   const [inputValue, setInputValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -22,7 +26,10 @@ export default function ChatInput() {
       event.preventDefault();
       // Submit form or handle Enter key press action
       console.log('Submit (Enter pressed):', inputValue);
-      // setInputValue(""); // Optionally clear input
+      if (inputValue.trim()) {
+        onSendMessage(inputValue.trim());
+        setInputValue(""); // Clear input after sending
+      }
     }
   };
 
@@ -53,7 +60,10 @@ export default function ChatInput() {
           className="h-9 w-9 md:h-10 bg-primary hover:bg-primary/90 text-primary-foreground" // Kept size icon for now, can be w-full if needed
           onClick={() => {
             console.log('Submit (Button clicked):', inputValue);
-            // setInputValue(""); // Optionally clear input
+            if (inputValue.trim()) {
+              onSendMessage(inputValue.trim());
+              setInputValue(""); // Clear input after sending
+            }
           }}
           title="Submit"
         >

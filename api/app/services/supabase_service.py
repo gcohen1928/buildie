@@ -176,14 +176,13 @@ async def store_commit_details(
     pusher_name: Optional[str],
     pusher_email: Optional[str],
     diff_text: Optional[str],
-    change_summary: Optional[str],
-    is_feature_shipped: Optional[bool],
     raw_commit_payload: Dict[str, Any],
-    raw_push_event_payload: Optional[Dict[str, Any]] = None, # The whole push event if available
-    changed_files: Optional[List[Dict[str, str]]] = None # List of {"file_path": "...", "status": "..."}
+    raw_push_event_payload: Optional[Dict[str, Any]] = None,
+    changed_files: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     """
-    Stores detailed commit information, including linked files and LLM analysis.
+    Stores detailed commit information, including linked files.
+    LLM analysis fields (change_summary, is_feature_shipped) have been removed.
     """
     commit_payload = {
         "project_id": project_id,
@@ -200,8 +199,6 @@ async def store_commit_details(
         "pusher_name": pusher_name,
         "pusher_email": pusher_email,
         "diff_text": diff_text,
-        "change_summary": change_summary,
-        "is_feature_shipped": is_feature_shipped,
         "raw_commit_payload": raw_commit_payload,
         "raw_push_event_payload": raw_push_event_payload
     }
