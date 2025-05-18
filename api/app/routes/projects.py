@@ -155,54 +155,78 @@ async def list_projects(
         print(f"An unexpected error occurred while listing projects: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
-@router.get("/{project_id}", response_model=ProjectRead)
-async def get_project(
-    project_id: uuid.UUID,
+@router.get("/{project_identifier}", response_model=ProjectRead)
+async def get_project( # Changed function name for clarity, though route path is same
+    project_identifier: str, # Changed type to str to accept UUID or slug
     # current_user: dict = Depends(get_current_user) # Ensure user owns project or has access
 ):
     """
-    Get a specific project by its ID.
-    - **project_id**: The UUID of the project to retrieve.
+    Get a specific project by its UUID or by its path string (e.g., "org/repo").
+    - **project_identifier**: The UUID or "org_name/repo_name" string of the project.
     """
     if not supabase_client:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database service is not configured or available.")
 
-    print(f"Fetching project with ID: {project_id}")
+    print(f"Fetching project with identifier: {project_identifier}")
+    
+    data_to_return = None
+    
     try:
-        response = await asyncio.to_thread(
-            supabase_client.table("projects")
-            .select("id, name, html_url, description") # Changed github_url to html_url
-            .eq("id", str(project_id))
-            .single() # Expect a single record or raises an error if not found or multiple found
-            .execute
-        )
-        
-        if response.data:
-            # The ProjectRead schema will validate the data, including HttpUrl conversion for github_url
-            return response.data 
+        # Attempt to treat as UUID first
+        parsed_uuid = None
+        try:
+            parsed_uuid = uuid.UUID(project_identifier)
+        except ValueError:
+            pass # Not a valid UUID, will try string lookup
+
+        if parsed_uuid:
+            print(f"Identifier '{project_identifier}' is a valid UUID. Querying by ID.")
+            response = await asyncio.to_thread(
+                supabase_client.table("projects")
+                .select("id, name, html_url, description")
+                .eq("id", str(parsed_uuid))
+                .single()
+                .execute
+            )
+            data_to_return = response.data
         else:
-            # This case should ideally be caught by .single() raising an error if not found.
-            # If .single() was not used, this would be the check for not found.
-            print(f"Project with ID {project_id} not found in database after successful query execution (no data).")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project with ID {project_id} not found.")
+            # Not a valid UUID, treat as a potential path (e.g., "org/repo")
+            print(f"Identifier '{project_identifier}' is not a UUID. Assuming it is 'org/repo' and querying by html_url.")
+            expected_html_url = f"https://github.com/{project_identifier}"
+            print(f"Constructed expected_html_url for query: '{expected_html_url}'")
+            
+            response = await asyncio.to_thread(
+                supabase_client.table("projects")
+                .select("id, name, html_url, description")
+                .eq("html_url", expected_html_url) # Query by the constructed html_url
+                .single() # Expect a single record
+                .execute
+            )
+            data_to_return = response.data
+
+        if data_to_return:
+            return data_to_return
+        else:
+            # This path should ideally be hit if .single() itself doesn't error out but returns no data
+            print(f"Project with identifier {project_identifier} not found after query attempts.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project with identifier {project_identifier} not found.")
 
     except APIError as e:
-        # Specifically handle PostgREST errors, e.g., PGRST116 for "StandardErrorResponse { message = "JSON object requested, multiple (or no) rows returned" }"
-        # This typically means .single() didn't find exactly one row.
-        print(f"Supabase APIError fetching project {project_id}: {e.code} - {e.message} - {e.details} - {e.hint}")
-        if e.code == 'PGRST116': # Not found by .single()
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project with ID {project_id} not found.")
+        # PGRST116: "JSON object requested, multiple (or no) rows returned" - from .single()
+        print(f"Supabase APIError fetching project {project_identifier}: {e.code} - {e.message}")
+        if e.code == 'PGRST116' or (hasattr(e, 'details') and isinstance(e.details, str) and "0 rows" in e.details): # Check for "0 rows" as Supabase might change exact error
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project with identifier {project_identifier} not found.")
         else:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error fetching project: {e.message}")
     except Exception as e:
-        print(f"An unexpected error occurred while fetching project {project_id}: {e}")
+        print(f"An unexpected error occurred while fetching project {project_identifier}: {e}")
         # import traceback
-        # traceback.print_exc()
+        # traceback.print_exc() # For server-side debugging
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.get("/{project_id}/commits", response_model=CommitListResponse)
 async def get_project_commits(
-    project_id: uuid.UUID,
+    project_id: uuid.UUID, # This still expects a UUID. Frontend needs to use the UUID after fetching project by slug.
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     # current_user: dict = Depends(get_current_user) # Optional: for auth

@@ -4,6 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 # TODO: Import routers
 from .routes import auth, webhook, projects #, generate, events # Uncommented webhook
@@ -43,6 +45,34 @@ app.include_router(webhook.router, prefix="/webhook", tags=["webhook"]) # Uncomm
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 # TODO: app.include_router(generate.router, prefix="/generate", tags=["generate"])
 # TODO: app.include_router(events.router, prefix="/events", tags=["events"])
+
+# Pydantic models for the mock demo endpoint
+class DemoGenerationRequest(BaseModel):
+    project_id: str
+    commits: Optional[List[str]] = None
+    user_prompt: str
+
+class DemoGenerationResponse(BaseModel):
+    tweet_thread: List[str] = Field(..., example=["Mock tweet 1!", "Mock tweet 2!"])
+    # Add any other fields your frontend might expect
+
+@app.post("/api/generate/demo", response_model=DemoGenerationResponse, tags=["Demo"])
+async def generate_demo_endpoint(request_body: DemoGenerationRequest):
+    print(f"Received demo generation request for project: {request_body.project_id}")
+    print(f"User prompt: {request_body.user_prompt}")
+    
+    # Simulate some work if you like
+    # import asyncio
+    # await asyncio.sleep(1)
+
+    # Return a successful mock response
+    return DemoGenerationResponse(
+        tweet_thread=[
+            f"This is a mock tweet for your prompt: '{request_body.user_prompt[:50]}...'",
+            "Buildie is working on it (mockly)!",
+            "#buildinpublic #demoresults 🎉"
+        ]
+    )
 
 @app.on_event("startup")
 async def startup_event():

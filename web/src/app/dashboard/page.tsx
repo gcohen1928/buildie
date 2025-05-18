@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import ChatInput from '@/components/Dashboard/ChatInput';
 import CommitHistoryTable, { Commit } from '@/components/Dashboard/CommitHistoryTable';
@@ -217,7 +217,8 @@ GenerationInProgressView.displayName = 'GenerationInProgressView'; // Good pract
 
 export default function DashboardPage() {
   const searchParams = useSearchParams();
-  const projectIdFromSearch = searchParams.get("projectId");
+  const projectId = searchParams.get("projectId");
+  const startGeneratingFromUrl = searchParams.get("startGenerating");
 
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
@@ -227,87 +228,30 @@ export default function DashboardPage() {
   const [isLoadingCommits, setIsLoadingCommits] = useState(true);
   const [commitsError, setCommitsError] = useState<string | null>(null);
 
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [commitsPerPage] = useState(10);
+  const [commitsPerPage] = useState(10); // Or make this configurable
   const [totalCommits, setTotalCommits] = useState(0);
 
+  // State for managing the generation view
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentPrompt, setCurrentPrompt] = useState("");
-  const [llmStream, setLlmStream] = useState<string[]>([]);
-  const [generatedContent, setGeneratedContent] = useState<string[] | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-  const [isLlmProcessingComplete, setIsLlmProcessingComplete] = useState(false);
+  const [currentPrompt, setCurrentPrompt] = useState(""); // To store the user's current prompt
+  const [llmStream, setLlmStream] = useState<string[]>([]); // To store LLM thought process (now for sidebar log)
+  const [generatedContent, setGeneratedContent] = useState<string[] | null>(null); // To store final generated content (now string[] for tweets)
+  const [generationError, setGenerationError] = useState<string | null>(null); // For API errors
+  const [isLlmProcessingComplete, setIsLlmProcessingComplete] = useState(false); // To know when to show final content
+  
+  // New state for editable text in the tweet preview Textarea
   const [editableTweetText, setEditableTweetText] = useState<string>("");
+
+  // New state for main progress display
   const [currentProgressText, setCurrentProgressText] = useState<string>("");
-  const [currentProgressIcon, setCurrentProgressIcon] = useState<React.ReactNode | null>(null);
+  const [currentProgressIcon, setCurrentProgressIcon] = useState<React.ReactNode | null>(null); // Changed to React.ReactNode
 
-  const hasAutoTriggeredForFeatureRef = useRef<string | null>(null);
+  // State to ensure auto-start from URL only happens once
+  const [hasAutoStartedFromUrl, setHasAutoStartedFromUrl] = useState(false);
 
-  const [projectId, setProjectId] = useState<string | null>(projectIdFromSearch);
-  useEffect(() => {
-    setProjectId(projectIdFromSearch);
-  }, [projectIdFromSearch]);
-
-  const fetchProjectDetails = useCallback(async (currentProjectId: string) => {
-    setIsLoadingProject(true);
-    setProjectError(null);
-    setProject(null);
-    console.log(`Fetching project data for ID: ${currentProjectId}`);
-    try {
-      const res = await fetch(`http://localhost:8000/projects/${currentProjectId}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || `Failed to fetch project: ${res.statusText}`);
-      }
-      const data: ProjectData = await res.json();
-      console.log("Project data fetched:", data);
-      setProject(data);
-      return data;
-    } catch (err: any) {
-      console.error("Error fetching project details:", err);
-      setProjectError(err.message || "An unknown error occurred while fetching project details.");
-      setProject(null);
-      throw err;
-    } finally {
-      setIsLoadingProject(false);
-    }
-  }, []);
-
-  const fetchProjectCommits = useCallback(async (currentProjectId: string, page: number) => {
-    setIsLoadingCommits(true);
-    setCommitsError(null);
-    console.log(`Fetching commits for project ID: ${currentProjectId}, page: ${page}`);
-    const skip = (page - 1) * commitsPerPage;
-    const limit = commitsPerPage;
-    try {
-      const res = await fetch(`http://localhost:8000/projects/${currentProjectId}/commits?skip=${skip}&limit=${limit}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || `Failed to fetch commits: ${res.statusText}`);
-      }
-      const commitDataResponse: ApiCommitResponse = await res.json();
-      console.log("Commits data fetched:", commitDataResponse);
-      const formattedCommits: Commit[] = commitDataResponse.commits.map(apiCommit => ({
-        id: apiCommit.id,
-        message: apiCommit.message || "No commit message",
-        author: apiCommit.author_name || "Unknown Author",
-        avatarUrl: `https://avatars.githubusercontent.com/u/1?s=40&v=4`,
-        date: new Date(apiCommit.commit_timestamp).toLocaleDateString(),
-        sha: apiCommit.commit_sha.substring(0, 7),
-        verified: false,
-      }));
-      setCommits(formattedCommits);
-      setTotalCommits(commitDataResponse.total_commits);
-    } catch (err: any) {
-      console.error("Error fetching commits:", err);
-      setCommitsError(err.message || "An unknown error occurred while fetching commits.");
-      setCommits([]);
-      setTotalCommits(0);
-    } finally {
-      setIsLoadingCommits(false);
-    }
-  }, [commitsPerPage]);
-
+  // Define handlers before useEffects that might use them
   const handleSendMessage = useCallback(async (message: string) => {
     if (!projectId) {
       console.error("No project ID available to send message.");
@@ -316,8 +260,10 @@ export default function DashboardPage() {
       setCurrentProgressIcon(<AlertTriangle className="h-6 w-6 text-red-500" />);
       return;
     }
+
     console.log("Message submitted to dashboard:", message, "for project:", projectId);
     setIsGenerating(true);
+    console.log("%%%%% handleSendMessage: Set isGenerating to true %%%%%");
     setCurrentPrompt(message);
     setLlmStream(["Agent session started..."]);
     setGeneratedContent(null);
@@ -332,25 +278,38 @@ export default function DashboardPage() {
 
     try {
       setProgress("Initializing Agent...", <Settings2 className="h-6 w-6 text-purple-400 animate-spin-slow" />);
+      
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const requestBody = { project_id: projectId, commits: [], user_prompt: message };
+      
+      const requestBody = {
+        project_id: projectId,
+        commits: [], 
+        user_prompt: message,
+      };
+
       await new Promise(resolve => setTimeout(resolve, 500));
       setProgress("Connecting to Buildie Service...", <Zap className="h-6 w-6 text-purple-400 animate-pulse" />);
       setLlmStream(prev => [...prev, `📞 Calling generation service at ${apiUrl}/api/generate/demo`]);
+
       const response = await fetch(`${apiUrl}/api/generate/demo`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(requestBody),
       });
+
       await new Promise(resolve => setTimeout(resolve, 500));
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Unknown API error" }));
         setProgress("API Error Occurred", <AlertTriangle className="h-6 w-6 text-red-500" />);
         throw new Error(errorData.detail || `API Error: ${response.status} ${response.statusText}`);
       }
+      
       setProgress("Processing Agent Response...", <Wand2 className="h-6 w-6 text-purple-400 animate-pulse" />); 
       const result = await response.json();
       setLlmStream(prev => [...prev, "✅ Agent responded! Formatting content..."]);
+      
       if (result.tweet_thread && Array.isArray(result.tweet_thread)) {
         setGeneratedContent(result.tweet_thread);
         setEditableTweetText(result.tweet_thread.join("\n\n---\n\n"));
@@ -363,6 +322,7 @@ export default function DashboardPage() {
       setIsLlmProcessingComplete(true);
       setCurrentProgressText("Content Ready!");
       setCurrentProgressIcon(<CheckCircle2 className="h-6 w-6 text-green-500" />); 
+
     } catch (error: any) {
       console.error("Error calling generation API:", error);
       setGenerationError(error.message || "Failed to generate content.");
@@ -373,52 +333,129 @@ export default function DashboardPage() {
       setEditableTweetText(errorMsg);
       setIsLlmProcessingComplete(true); 
     }
-  }, [projectId]);
+  }, [projectId]); // projectId is a dependency for handleSendMessage
 
+  const handleUseContent = useCallback(() => {
+    const updatedContentArray = editableTweetText.split("\n\n---\n\n");
+    setGeneratedContent(updatedContentArray);
+    console.log("Using content (array):", updatedContentArray);
+    console.log("Original editable text:", editableTweetText);
+  }, [editableTweetText]);
+
+  const handleDoneOrCancelGeneration = useCallback(() => {
+    setIsGenerating(false);
+    setLlmStream([]);
+    setGeneratedContent(null);
+    setCurrentPrompt("");
+    setGenerationError(null); 
+    setIsLlmProcessingComplete(false);
+    setCurrentProgressText(""); 
+    setCurrentProgressIcon(null); 
+    setEditableTweetText("");
+  }, []);
+
+  const fetchProjectDetails = useCallback(async (currentProjectId: string) => {
+    setIsLoadingProject(true);
+    setProjectError(null);
+    setProject(null); // Clear previous project details
+    console.log(`Fetching project data for ID: ${currentProjectId}`);
+    try {
+      const res = await fetch(`http://localhost:8000/projects/${currentProjectId}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.detail || `Failed to fetch project: ${res.statusText}`);
+      }
+      const data: ProjectData = await res.json();
+      console.log("Project data fetched:", data);
+      setProject(data);
+      return data; // Return project data for chaining
+    } catch (err: any) {
+      console.error("Error fetching project details:", err);
+      setProjectError(err.message || "An unknown error occurred while fetching project details.");
+      setProject(null);
+      throw err; // Re-throw to stop further processing in the main useEffect
+    } finally {
+      setIsLoadingProject(false);
+    }
+  }, []);
+
+
+  const fetchProjectCommits = useCallback(async (currentProjectId: string, page: number) => {
+    setIsLoadingCommits(true);
+    setCommitsError(null);
+    // Don't clear commits here, allow showing old commits while loading new page if preferred,
+    // or clear them: setCommits([]); 
+    console.log(`Fetching commits for project ID: ${currentProjectId}, page: ${page}`);
+    
+    const skip = (page - 1) * commitsPerPage;
+    const limit = commitsPerPage;
+
+    try {
+      const res = await fetch(`http://localhost:8000/projects/${currentProjectId}/commits?skip=${skip}&limit=${limit}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.detail || `Failed to fetch commits: ${res.statusText}`);
+      }
+      const commitDataResponse: ApiCommitResponse = await res.json();
+      console.log("Commits data fetched:", commitDataResponse);
+
+      const formattedCommits: Commit[] = commitDataResponse.commits.map(apiCommit => ({
+        id: apiCommit.id,
+        message: apiCommit.message || "No commit message",
+        author: apiCommit.author_name || "Unknown Author",
+        avatarUrl: `https://avatars.githubusercontent.com/u/1?s=40&v=4`, // Placeholder avatar
+        date: new Date(apiCommit.commit_timestamp).toLocaleDateString(),
+        sha: apiCommit.commit_sha.substring(0, 7),
+        verified: false, // Placeholder
+      }));
+      setCommits(formattedCommits);
+      setTotalCommits(commitDataResponse.total_commits);
+    } catch (err: any) {
+      console.error("Error fetching commits:", err);
+      setCommitsError(err.message || "An unknown error occurred while fetching commits.");
+      setCommits([]); // Clear commits on error
+      setTotalCommits(0);
+    } finally {
+      setIsLoadingCommits(false);
+    }
+  }, [commitsPerPage]); // Added commitsPerPage dependency
+
+  // Effect 1: Handles projectId changes, loads project data, and resets states for new project
   useEffect(() => {
-    const currentFeatureQueryParam = searchParams.get("feature");
-
     if (projectId) {
-      setIsGenerating(false);
+      console.log(`New/changed projectId detected: ${projectId}. Resetting states.`);
+      // Reset states that should change when projectId changes
+      setIsGenerating(false); // Stop any ongoing generation for a previous project
       setCurrentPage(1);
       setCommits([]);
       setTotalCommits(0);
-      
-      const uniqueTriggerKey = `${projectId}_${currentFeatureQueryParam}`;
-      if (hasAutoTriggeredForFeatureRef.current && hasAutoTriggeredForFeatureRef.current !== uniqueTriggerKey) {
-        hasAutoTriggeredForFeatureRef.current = null;
-      }
-      
+      setProject(null); // Clear previous project details before fetching new ones
+      setProjectError(null);
+      setCommitsError(null);
+      setHasAutoStartedFromUrl(false); // Allow auto-start for the new project if params are present
+      setIsLlmProcessingComplete(false);
+      setCurrentPrompt("");
+      setLlmStream([]);
+      setGeneratedContent(null);
+      setEditableTweetText("");
+
       fetchProjectDetails(projectId)
         .then((fetchedProject) => {
-          if (fetchedProject) {
+          if (fetchedProject) { // fetchProjectDetails now returns the project or throws
             fetchProjectCommits(fetchedProject.id, 1);
-            if (currentFeatureQueryParam && !isGenerating && hasAutoTriggeredForFeatureRef.current !== uniqueTriggerKey) {
-              hasAutoTriggeredForFeatureRef.current = uniqueTriggerKey;
-              const decodedFeatureName = decodeURIComponent(currentFeatureQueryParam);
-              let baseFeatureName = decodedFeatureName;
-              const commitShaRegex = /\(from commit ([a-f0-9]{7})\)$/i;
-              const match = decodedFeatureName.match(commitShaRegex);
-              if (match && match[1]) {
-                baseFeatureName = decodedFeatureName.replace(commitShaRegex, "").trim();
-                console.log(`Feature param: Extracted base feature name "${baseFeatureName}"`);
-              } else {
-                console.log(`Feature param: Using full feature name "${decodedFeatureName}", no specific commit SHA found in standard format.`);
-              }
-              const prompt = `Generate a promotional post about the recently completed feature: "${baseFeatureName}".`;
-              console.log(`Auto-triggering generation for project ${projectId}, feature: "${baseFeatureName}" with prompt: "${prompt}"`);
-              handleSendMessage(prompt);
-            }
-          }
+          } 
+          // Auto-start logic is moved to a separate effect
         })
-        .catch(() => {
-          setCommits([]);
-          setTotalCommits(0);
+        .catch((err) => {
+          // Errors are handled within fetchProjectDetails or fetchProjectCommits
+          // Ensure loading states are false if things go wrong early
+          setIsLoadingProject(false);
           setIsLoadingCommits(false);
-          hasAutoTriggeredForFeatureRef.current = null;
+          // projectError will be set by fetchProjectDetails
         });
     } else {
-      console.log("No project ID in URL.");
+      // Cleanup if projectId becomes null (e.g., navigating away or invalid URL)
+      console.log("No projectId in URL or projectId cleared.");
       setProject(null);
       setCommits([]);
       setTotalCommits(0);
@@ -426,9 +463,29 @@ export default function DashboardPage() {
       setIsLoadingCommits(false);
       setProjectError(null);
       setCommitsError(null);
-      hasAutoTriggeredForFeatureRef.current = null;
+      setIsGenerating(false);
+      setHasAutoStartedFromUrl(false);
+      setCurrentPrompt("");
+      // etc. clear other relevant states
     }
-  }, [projectId, searchParams, fetchProjectDetails, fetchProjectCommits, isGenerating, handleSendMessage]);
+  }, [projectId, fetchProjectDetails, fetchProjectCommits]); // Dependencies for project loading
+
+  // Effect 2: Handles auto-starting generation based on URL params and loaded project
+  useEffect(() => {
+    if (
+      project && // Ensure project data is loaded
+      startGeneratingFromUrl === "true" &&
+      !hasAutoStartedFromUrl && // Only run once per valid condition set
+      !isGenerating // Don't interfere if already generating
+    ) {
+      console.log(
+        `Auto-starting generation for project ${project.name} (ID: ${project.id}) due to startGenerating=true URL parameter.`
+      );
+      const defaultPrompt = `Generate a brief, engaging social media update about the latest developments or a cool feature in the project '${project.name}'. What's something exciting to share?`;
+      handleSendMessage(defaultPrompt); // This will set isGenerating to true
+      setHasAutoStartedFromUrl(true);   // Mark that auto-start has occurred for this load
+    }
+  }, [project, startGeneratingFromUrl, hasAutoStartedFromUrl, isGenerating, handleSendMessage]); // Dependencies for auto-start logic
 
   const handleNextPage = () => {
     if (currentPage * commitsPerPage < totalCommits) {
@@ -447,26 +504,8 @@ export default function DashboardPage() {
 
   console.log("##### DashboardPage render, isGenerating state:", isGenerating);
 
-  const handleUseContent = useCallback(() => {
-    const updatedContentArray = editableTweetText.split("\n\n---\n\n");
-    setGeneratedContent(updatedContentArray); // Sync back to the main state
-    console.log("Using content (array):", updatedContentArray);
-    console.log("Original editable text:", editableTweetText);
-    // Proceed with using updatedContentArray (e.g., save, post, etc.)
-    // For now, just logging and ensuring the state is updated.
-  }, [editableTweetText]);
-
-  const handleDoneOrCancelGeneration = useCallback(() => {
-    setIsGenerating(false);
-    setLlmStream([]);
-    setGeneratedContent(null);
-    setCurrentPrompt("");
-    setGenerationError(null); 
-    setIsLlmProcessingComplete(false);
-    setCurrentProgressText(""); 
-    setCurrentProgressIcon(null); 
-    setEditableTweetText(""); // Reset editable text
-  }, []);
+  // Placeholder for the new Generation In Progress View
+  // const GenerationInProgressView = () => ( ... MOVED OUTSIDE ... );
 
   return (
     <div className="min-h-screen text-foreground font-sans flex flex-col items-center pt-12 md:pt-16 p-4 md:p-6 

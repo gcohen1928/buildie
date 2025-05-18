@@ -235,6 +235,7 @@ async def process_github_commit_data(
         if completed_feature_name: # Ensure we have a feature name before trying to send
             print(f"Proceeding to send feature completion email for '{completed_feature_name}' in project {project_full_name}.")
             await send_feature_completion_email(
+                project_id=project_id,
                 project_name=project_full_name,
                 feature_name=completed_feature_name,
                 recipient_email=DESIGNATED_EMAIL_ADDRESS

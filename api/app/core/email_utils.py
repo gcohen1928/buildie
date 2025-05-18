@@ -23,8 +23,9 @@ async def send_feature_completion_email(project_id: str, project_name: str, feat
     """
     subject = f"🎉 Feature '{feature_name}' Completed in {project_name}!"
     
-    safe_feature_name = feature_name.replace(" ", "%20").replace("&", "%26").replace("?", "%3F")
-    post_generation_link = f"{YOUR_APP_BASE_URL}/dashboard?projectId={project_id}&feature={safe_feature_name}"
+    # safe_feature_name = feature_name.replace(" ", "%20").replace("&", "%26").replace("?", "%3F") # No longer needed for the link
+    # project_id is already a UUID string, no need to sanitize like project_name for the URL path part
+    post_generation_link = f"{YOUR_APP_BASE_URL}/dashboard?projectId={project_id}&startGenerating=true"
     
     # Define potentially problematic CSS properties as separate strings to avoid f-string parsing issues
     header_brand_name_font_size = "font-size: 20px; /* Slightly smaller */"
