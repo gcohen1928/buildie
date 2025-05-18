@@ -5,6 +5,17 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation'; // For redirecting after login
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -30,89 +41,84 @@ const LoginForm: React.FC = () => {
   };
 
   return (
-    <motion.form
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      onSubmit={handleSubmit}
-      className="space-y-6 max-w-md mx-auto p-8 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+      className="max-w-md mx-auto"
     >
-      <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Welcome Back</h2>
-      
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Email address
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Mail className="h-5 w-5 text-gray-400" aria-hidden="true" />
+      <Card>
+        <CardHeader className="space-y-1 text-center">
+          <CardTitle className="text-3xl font-bold">Welcome Back</CardTitle>
+          <CardDescription>
+            Enter your email below to login to your account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">
+                <Mail className="mr-2 h-4 w-4 inline-block" /> Email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Label htmlFor="password" className="flex-grow">
+                  <Lock className="mr-2 h-4 w-4 inline-block" /> Password
+                </Label>
+                <Button variant="link" size="sm" asChild className="p-0 h-auto">
+                  <a href="#" className="text-xs">
+                    Forgot your password?
+                  </a>
+                </Button>
+              </div>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {authError && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center space-x-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md border border-destructive/30"
+              >
+                <AlertCircle className="h-5 w-5" />
+                <span>{authError}</span>
+              </motion.div>
+            )}
+            <Button type="submit" disabled={isLoading} className="w-full">
+              {isLoading ? 'Logging in...' : 'Login'}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-2 text-sm">
+           <div className="text-center">
+            Don't have an account?{' '}
+            <Button variant="link" asChild className="p-0 h-auto">
+                <a href="/signup">Sign up</a>
+            </Button>
           </div>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="you@example.com"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Password
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Lock className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          </div>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="••••••••"
-          />
-        </div>
-      </div>
-
-      {authError && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center space-x-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 p-3 rounded-md border border-red-300 dark:border-red-700"
-        >
-          <AlertCircle className="h-5 w-5" />
-          <span>{authError}</span>
-        </motion.div>
-      )}
-
-      <div>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-150"
-        >
-          {isLoading ? 'Logging in...' : 'Login'}
-        </button>
-      </div>
-      {/* Placeholder for "Forgot password?" or "Sign up" links */}
-      <div className="text-sm text-center">
-        <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-          Forgot your password?
-        </a>
-      </div>
-       <div className="text-sm text-center text-gray-600 dark:text-gray-400">
-        Don't have an account? <a href="/signup" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">Sign up</a>
-      </div>
-    </motion.form>
+        </CardFooter>
+      </Card>
+    </motion.div>
   );
 };
 
