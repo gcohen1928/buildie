@@ -6,7 +6,7 @@ from typing import Optional # Added Optional just in case, though not strictly u
 
 # Application Configuration relevant to emails
 DESIGNATED_EMAIL_ADDRESS = os.getenv("FEATURE_COMPLETE_EMAIL_RECIPIENT", "your_email@example.com")
-YOUR_APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:3000s")
+YOUR_APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:3000")
 
 # SMTP Configuration from environment variables
 EMAIL_SMTP_HOST = os.getenv("EMAIL_SMTP_HOST", "smtp.example.com")
@@ -17,15 +17,14 @@ EMAIL_SENDER_EMAIL = os.getenv("EMAIL_SENDER_EMAIL", "noreply@buildie.io")
 EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "Buildie Autopilot")
 EMAIL_SMTP_USE_TLS = os.getenv("EMAIL_SMTP_USE_TLS", "true").lower() == "true"
 
-async def send_feature_completion_email(project_name: str, feature_name: str, recipient_email: str):
+async def send_feature_completion_email(project_id: str, project_name: str, feature_name: str, recipient_email: str):
     """
     Sends an email notification about feature completion using the 'emails' library.
     """
     subject = f"🎉 Feature '{feature_name}' Completed in {project_name}!"
     
     safe_feature_name = feature_name.replace(" ", "%20").replace("&", "%26").replace("?", "%3F")
-    safe_project_name = project_name.replace(" ", "%20").replace("/", "%2F")
-    post_generation_link = f"{YOUR_APP_BASE_URL}/dashboard?projectId={safe_project_name}&feature={safe_feature_name}"
+    post_generation_link = f"{YOUR_APP_BASE_URL}/dashboard?projectId={project_id}&feature={safe_feature_name}"
     
     # Define potentially problematic CSS properties as separate strings to avoid f-string parsing issues
     header_brand_name_font_size = "font-size: 20px; /* Slightly smaller */"
