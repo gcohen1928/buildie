@@ -145,6 +145,17 @@ class RepoIndexer:
         """
         git.Repo.clone_from(repo_url, dest_dir)
 
+    def _chunk_single_file_task(self, task_args: tuple) -> List[Dict[str, Any]]:
+        fpath, rel_path, is_python_file = task_args
+        try:
+            if is_python_file:
+                return self._chunk_python_file(fpath, rel_path)
+            else:
+                return self._chunk_text_file(fpath, rel_path)
+        except Exception as e:
+            logging.warning(f"Error chunking file {fpath} in parallel task: {e}", exc_info=True)
+            return []
+
     def _chunk_codebase(self, repo_dir: str) -> List[Dict[str, Any]]:
         """
         Walk the repo and chunk code files by function/class (AST) or by lines.
@@ -181,22 +192,22 @@ class RepoIndexer:
         try:
             tree = ast.parse(source)
         except Exception as e:
-            print(f"AST parse failed for {fpath}: {e}")
+            logging.warning(f"AST parse failed for {fpath}, falling back to text chunking: {e}")
             return self._chunk_text_file(fpath, rel_path)
         chunks = []
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 start = node.lineno - 1
-                end = getattr(node, 'end_lineno', None) or start + 1
+                end = getattr(node, 'end_lineno', None) or start + 1 # Ensure end is valid
                 lines = source.splitlines()[start:end]
                 chunk_text = '\n'.join(lines)
                 chunk_text = chunk_text.replace('\u0000', '') # Sanitize null characters
                 # Split large chunks by tokens
                 if count_tokens(chunk_text) > MAX_TOKENS_PER_CHUNK:
-                    # Split by lines to fit token limit
-                    split_chunks = self._split_large_chunk(chunk_text, rel_path, start+1, end)
+                    logging.debug(f"Python chunk too large ({count_tokens(chunk_text)} tokens), splitting: {rel_path} lines {start+1}-{end}")
+                    split_chunks = self._split_large_chunk(chunk_text, rel_path, start+1, end, "python_ast_split")
                     chunks.extend(split_chunks)
-                else:
+                elif chunk_text.strip(): 
                     chunks.append({
                         'text': chunk_text, # Already sanitized
                         'metadata': {
@@ -207,7 +218,10 @@ class RepoIndexer:
                             'end_line': end
                         }
                     })
-        return chunks if chunks else self._chunk_text_file(fpath, rel_path)
+        if not chunks: 
+            logging.debug(f"No AST chunks found for {fpath}, using text chunking for the whole file.")
+            return self._chunk_text_file(fpath, rel_path)
+        return chunks
 
     def _split_large_chunk(self, chunk_text: str, rel_path: str, original_start_line: int, original_end_line: int) -> List[Dict[str, Any]]:
         """Recursively splits a chunk of text if it's too large. 
@@ -357,6 +371,8 @@ class RepoIndexer:
         chunks = []
         i = 0
         n = len(lines)
+        if n == 0: return []
+
         while i < n:
             chunk_lines = lines[i:i+chunk_size]
             chunk_text = ''.join(chunk_lines)
@@ -364,7 +380,7 @@ class RepoIndexer:
             if count_tokens(chunk_text) > MAX_TOKENS_PER_CHUNK:
                 split_chunks = self._split_large_chunk(chunk_text, rel_path, i+1, min(i+chunk_size, n)) # chunk_text is sanitized
                 chunks.extend(split_chunks)
-            elif chunk_text.strip():  # Only add non-empty chunks
+            elif chunk_text.strip():  
                 chunks.append({
                     'text': chunk_text, # Already sanitized
                     'metadata': {
@@ -374,7 +390,11 @@ class RepoIndexer:
                         'end_line': min(i + chunk_size, n)
                     }
                 })
-            i += chunk_size - overlap
+            
+            next_i = i + chunk_size - overlap
+            if next_i <= i and n > i : # Ensure progress
+                 next_i = i + 1
+            i = next_i
         return chunks
 
     def _embed_chunks_and_store(self, code_chunks: List[Dict[str, Any]]) -> tuple[int, int]:
