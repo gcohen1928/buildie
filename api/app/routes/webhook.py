@@ -1,14 +1,56 @@
 from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
+from pydantic import BaseModel, HttpUrl
+from typing import List, Optional
 import hmac
 import hashlib
 import os
 
 # TODO: Import ingest functions
 # from ..ingest.diff_processor import process_github_push
+# TODO: Import Supabase client/service
+# from ..services.supabase_service import store_commit_data 
 
 router = APIRouter()
 
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
+
+# Pydantic Models for GitHub Push Event
+class GitHubUser(BaseModel):
+    name: str
+    email: Optional[str] = None
+    username: Optional[str] = None
+
+class GitHubCommit(BaseModel):
+    id: str
+    message: str
+    timestamp: str # Consider converting to datetime
+    url: HttpUrl
+    author: GitHubUser
+    committer: GitHubUser
+    added: List[str]
+    removed: List[str]
+    modified: List[str]
+
+class GitHubRepository(BaseModel):
+    id: int
+    name: str
+    full_name: str
+    html_url: HttpUrl
+    private: bool
+
+class GitHubPusher(BaseModel):
+    name: str
+    email: Optional[str] = None
+
+class GitHubPushEvent(BaseModel):
+    ref: str
+    before: str
+    after: str
+    repository: GitHubRepository
+    pusher: GitHubPusher
+    commits: List[GitHubCommit]
+    head_commit: Optional[GitHubCommit] = None
+    compare: HttpUrl # URL to compare changes
 
 async def verify_signature(request: Request):
     """Verify the GitHub webhook signature."""
@@ -48,17 +90,41 @@ async def github_webhook(
         print(f"Signature verification failed: {e.detail}")
         raise e
 
-    payload = await request.json()
+    raw_payload = await request.json() # Get raw payload first for logging if parsing fails
     print(f"Received GitHub webhook. Event: {x_github_event}, Delivery ID: {x_github_delivery}")
 
     if x_github_event == "ping":
         return {"message": "GitHub webhook ping received successfully"}
 
     if x_github_event == "push":
-        # TODO: Add the actual processing to background tasks
-        # background_tasks.add_task(process_github_push, payload, request.app.state.supabase)
-        print(f"Processing push event for repo: {payload.get('repository',{}).get('full_name')}")
-        return {"message": "Push event received and processing started"}
+        try:
+            push_event = GitHubPushEvent.model_validate(raw_payload)
+        except Exception as e:
+            print(f"Error parsing GitHub push event payload: {e}")
+            raise HTTPException(status_code=422, detail=f"Error parsing push event: {e}")
+
+        repo_name = push_event.repository.full_name
+        pusher_name = push_event.pusher.name
+        num_commits = len(push_event.commits)
+        
+        print(f"Processing push event for repo: {repo_name} by {pusher_name}. Commits: {num_commits}")
+
+        for commit in push_event.commits:
+            print(f"  Commit ID: {commit.id}")
+            print(f"  Message: {commit.message}")
+            print(f"  Timestamp: {commit.timestamp}")
+            print(f"  Author: {commit.author.name}")
+            print(f"  Modified files: {commit.modified}")
+            # TODO: M1.4 - Store commit data in Supabase
+            # background_tasks.add_task(store_commit_data, commit, push_event.repository)
+            
+            # TODO: M1.3 - Trigger diff processing for this commit
+            # For example, you might want to get the diff URL or pass commit details
+            # diff_url = f"{push_event.repository.html_url}/commit/{commit.id}.diff"
+            # background_tasks.add_task(process_github_push, commit_id=commit.id, diff_url=diff_url, ...)
+            
+        print(f"Finished initial processing of push event for {repo_name}")
+        return {"message": f"Push event for {repo_name} received and processing started for {num_commits} commit(s)"}
     
     # Handle other events as needed or ignore
     print(f"Received unhandled GitHub event: {x_github_event}")
