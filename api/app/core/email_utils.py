@@ -60,13 +60,13 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     padding: 25px 20px; /* Adjusted padding */
     text-align: center;
   }}
-  .header .brand-name {
-    font-size: 22px;
-    font-weight: 700;
+  .header .brand-name {{
     color: #FFFFFF;
-    margin-bottom: 10px;
+    font-size: 22px; /* Ensuring this is parsed correctly */
+    font-weight: 700;
     letter-spacing: 0.5px;
-  }
+    margin-bottom: 10px;
+  }}
   .header h1 {{
     margin: 0;
     font-size: 26px; /* Slightly adjusted size */
