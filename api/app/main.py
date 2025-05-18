@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import os
 
 # TODO: Import routers
-from .routes import auth, webhook #, generate, events # Uncommented webhook
+from .routes import auth, webhook, projects #, generate, events # Uncommented webhook
 # TODO: Import Phoenix for Arize logging if global setup is needed
 # import phoenix as px
 
@@ -40,6 +40,7 @@ app.add_middleware(
 # Mount routers
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(webhook.router, prefix="/webhook", tags=["webhook"]) # Uncommented this line
+app.include_router(projects.router, prefix="/projects", tags=["projects"])
 # TODO: app.include_router(generate.router, prefix="/generate", tags=["generate"])
 # TODO: app.include_router(events.router, prefix="/events", tags=["events"])
 

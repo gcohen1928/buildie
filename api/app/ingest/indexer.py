@@ -11,6 +11,8 @@ from supabase import create_client, Client # Added Supabase
 from urllib.parse import urlparse # Added for URL parsing
 from postgrest.exceptions import APIError  # Added for handling APIError
 import hashlib  # Added for generating hash-based IDs
+# from datetime import datetime as dt # No longer needed here
+# import uuid # No longer needed here for ingest_commit_history args
 
 # NOTE: Requires: pip install gitpython openai numpy tiktoken supabase
 try:
@@ -93,7 +95,9 @@ class RepoIndexer:
         Returns the ID of the newly created project.
         """
         try:
-            parsed_url = urlparse(repo_url)
+            # Ensure repo_url is a string before parsing
+            repo_url_str = str(repo_url)
+            parsed_url = urlparse(repo_url_str)
             path_segments = [segment for segment in parsed_url.path.split('/') if segment]
             
             if len(path_segments) >= 2:
@@ -109,14 +113,14 @@ class RepoIndexer:
             # Generate a unique github_repo_id based on the repository URL
             # This ensures uniqueness without requiring the GitHub API
             # We use a positive integer by taking the absolute value of the hash
-            github_repo_id = abs(int(hashlib.md5(repo_url.encode()).hexdigest(), 16) % (10 ** 16))
-            print(f"Generated github_repo_id: {github_repo_id} for repo: {repo_url}")
+            github_repo_id = abs(int(hashlib.md5(repo_url_str.encode()).hexdigest(), 16) % (10 ** 16))
+            print(f"Generated github_repo_id: {github_repo_id} for repo: {repo_url_str}")
 
             project_data = {
                 "name": project_name,
                 "full_name": project_full_name,
                 "github_repo_id": github_repo_id,
-                "html_url": repo_url,
+                "html_url": repo_url_str,
                 # user_id is also in projects table, not handled here.
                 # Assumes user_id is nullable or has a default in your DB schema,
                 # or this insert will fail if user_id is NOT NULL without a default.
@@ -138,7 +142,7 @@ class RepoIndexer:
                 elif hasattr(response, 'status_code') and response.status_code not in [200, 201]: # Check for non-success status codes
                     error_detail = f"Status: {response.status_code}, Message: {getattr(response, 'message', '') or getattr(response, 'details', '')}"
                 
-                error_message = f"Failed to create project entry for {repo_url}. Details: {error_detail}. Response: {response}"
+                error_message = f"Failed to create project entry for {repo_url_str}. Details: {error_detail}. Response: {response}"
                 print(error_message)
                 raise Exception(error_message)
         except APIError as e:
@@ -151,7 +155,7 @@ class RepoIndexer:
                 
                 if 'projects_github_repo_id_key' in error_details:
                     # Handle github_repo_id constraint
-                    print(f"Duplicate github_repo_id detected for {repo_url}. Finding existing project...")
+                    print(f"Duplicate github_repo_id detected for {repo_url_str}. Finding existing project...")
                     
                     try:
                         query_response = self.supabase.table("projects").select("id").eq("github_repo_id", github_repo_id).execute()
@@ -172,7 +176,7 @@ class RepoIndexer:
                         raise
                 else:
                     # Some other unique constraint - re-raise
-                    print(f"API Error during project creation for {repo_url}: {e}")
+                    print(f"API Error during project creation for {repo_url_str}: {e}")
                     raise
                 
                 # Common handling for both constraint types after finding the existing project
@@ -197,10 +201,10 @@ class RepoIndexer:
                     raise Exception(f"Could not find existing project with {constraint_type}={constraint_value} despite duplicate key error")
             else:
                 # Not a unique constraint violation - re-raise
-                print(f"API Error during project creation for {repo_url}: {e}")
+                print(f"API Error during project creation for {repo_url_str}: {e}")
                 raise
         except Exception as e:
-            print(f"Exception during project creation for {repo_url}: {e}")
+            print(f"Exception during project creation for {repo_url_str}: {e}")
             import traceback
             traceback.print_exc()
             raise
@@ -344,7 +348,7 @@ class RepoIndexer:
                 # Split large chunks by tokens
                 if count_tokens(chunk_text) > MAX_TOKENS_PER_CHUNK:
                     logging.debug(f"Python chunk too large ({count_tokens(chunk_text)} tokens), splitting: {rel_path} lines {start+1}-{end}")
-                    split_chunks = self._split_large_chunk(chunk_text, rel_path, start+1, end, "python_ast_split")
+                    split_chunks = self._split_large_chunk(chunk_text, rel_path, start+1, end)
                     chunks.extend(split_chunks)
                 elif chunk_text.strip(): 
                     chunks.append({
