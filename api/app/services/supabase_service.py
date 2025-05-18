@@ -5,7 +5,7 @@ from pydantic import HttpUrl
 
 # Initialize Supabase client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") # Use the service role key for backend operations
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") # Use the service role key for backend operations
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Supabase URL and Key must be set in environment variables.")
@@ -189,7 +189,7 @@ async def store_commit_details(
         "commit_sha": commit_sha,
         "message": message,
         "commit_timestamp": commit_timestamp,
-        "compare_url": compare_url,
+        "compare_url": str(compare_url) if compare_url else None,
         "author_name": author_name,
         "author_email": author_email,
         "author_github_username": author_github_username,
