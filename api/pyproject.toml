@@ -31,6 +31,11 @@ loguru = "^0.7.2"
 # OpenAPI schema generator for FastAPI
 # fastapi-openapi-parser = "^0.3.1" # Example, or use FastAPI's built-in
 psycopg2-binary = "^2.9.9" # For Supabase if using PostgreSQL directly
+gitpython = "^3.1.44"
+openai = "^1.79.0"
+faiss-cpu = "^1.11.0"
+tiktoken = "^0.9.0"
+numpy = "<2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.1"
