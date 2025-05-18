@@ -1,7 +1,7 @@
 import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
-
+#
 # Determine the path to the root .env file
 # __file__ is api/app/core/supabase_client.py
 # os.path.dirname(__file__) is api/app/core
