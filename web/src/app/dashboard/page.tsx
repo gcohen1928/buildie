@@ -841,7 +841,7 @@ export default function DashboardPage() {
           platform: "Twitter",
           dateGenerated: formattedDate,
           performance: { views: 0, likes: 0, shares: 0 },
-          directLink: `https://x.com/glenomenagabe/status/`,
+          directLink: `https://x.com/glenomenagabe/`,
           accountName: "Your Account", 
           accountHandle: "glenomenagabe",
           avatarUrl: "/buildie-logo-small.png"
