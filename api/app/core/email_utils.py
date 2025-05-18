@@ -35,16 +35,89 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Feature Completed: {feature_name}</title>
 <style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; margin: 0; padding: 0; background-color: #f4f4f4; color: #333; }}
-  .container {{ max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-  .header {{ background-color: #007bff; color: #ffffff; padding: 20px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px; }}
-  .header h1 {{ margin: 0; font-size: 24px; }}
-  .content {{ padding: 20px; line-height: 1.6; }}
-  .content p {{ margin: 10px 0; }}
-  .content strong {{ color: #0056b3; }}
-  .button-container {{ text-align: center; margin-top: 30px; margin-bottom: 20px; }}
-  .button {{ background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; }}
-  .footer {{ text-align: center; padding: 15px; font-size: 0.9em; color: #777; border-top: 1px solid #eeeeee; margin-top: 20px; }}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    margin: 0;
+    padding: 0;
+    background-color: #1A1A2E; /* Dark background to match app */
+    color: #E0E0E0; /* Light text for contrast */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }}
+  .container {{
+    max-width: 600px;
+    margin: 40px auto;
+    background-color: #2A2A3E; /* Slightly lighter panel background */
+    padding: 0;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    overflow: hidden; /* Ensures border radius is respected by inner elements */
+  }}
+  .header {{
+    background-color: #4A00E0; /* Vibrant purple accent */
+    color: #ffffff;
+    padding: 30px 20px;
+    text-align: center;
+  }}
+  .header h1 {{
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+  }}
+  .content {{
+    padding: 30px 35px;
+    line-height: 1.7;
+  }}
+  .content p {{
+    margin: 15px 0;
+    font-size: 16px;
+  }}
+  .content .feature-name {{
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #BB86FC; /* Lighter purple for emphasis */
+    text-align: center;
+    display: block;
+    margin: 20px 0;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+  }}
+  .button-container {{
+    text-align: center;
+    margin-top: 35px;
+    margin-bottom: 25px;
+  }}
+  .button {{
+    background-color: #4A00E0; /* Consistent purple accent */
+    color: white;
+    padding: 14px 30px;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    display: inline-block;
+    transition: background-color 0.2s ease-in-out;
+  }}
+  .button:hover {{
+    background-color: #5A10F0; /* Slightly lighter purple on hover */
+  }}
+  .footer {{
+    text-align: center;
+    padding: 25px;
+    font-size: 0.9em;
+    color: #A0A0A0; /* Softer grey for footer text */
+    border-top: 1px solid #3A3A4E; /* Subtle separator line */
+    margin-top: 20px;
+  }}
+  .footer a {{
+    color: #BB86FC; /* Lighter purple for links */
+    text-decoration: none;
+  }}
+  .footer a:hover {{
+    text-decoration: underline;
+  }}
 </style>
 </head>
 <body>
@@ -54,17 +127,17 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     </div>
     <div class="content">
       <p>Hi there,</p>
-      <p>Great news! We noticed you've been working on the <strong>{project_name}</strong> project and have just completed the feature:</p>
-      <p style="text-align: center; font-size: 1.1em;"><em>{feature_name}</em></p>
-      <p>We're excited to help you share your progress. An initial post is being drafted for you automatically!</p>
+      <p>Amazing news! We've detected that you've just completed a significant feature in your <strong>{project_name}</strong> project:</p>
+      <div class="feature-name"><em>{feature_name}</em></div>
+      <p>We're already drafting an initial post to help you showcase your hard work. Ready to take a look?</p>
       <div class="button-container">
         <a href="{post_generation_link}" class="button">Review Your Post</a>
       </div>
-      <p>You can review, edit, and then publish it to share your awesome work.</p>
+      <p>Feel free to review, tweak, and then publish it to share your awesome progress with the world.</p>
     </div>
     <div class="footer">
-      <p>Thanks,<br>The {EMAIL_SENDER_NAME} Team</p>
-      <p><a href="{YOUR_APP_BASE_URL}" style="color: #777;">Visit Buildie</a></p>
+      <p>Keep up the great work,<br>The {EMAIL_SENDER_NAME} Team</p>
+      <p><a href="{YOUR_APP_BASE_URL}">Visit Buildie</a></p>
     </div>
   </div>
 </body>
