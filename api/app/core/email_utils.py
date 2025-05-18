@@ -57,12 +57,19 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
   .header {{
     background-color: #4A00E0; /* Vibrant purple accent */
     color: #ffffff;
-    padding: 30px 20px;
+    padding: 25px 20px; /* Adjusted padding */
     text-align: center;
   }}
+  .header .brand-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+  }
   .header h1 {{
     margin: 0;
-    font-size: 28px;
+    font-size: 26px; /* Slightly adjusted size */
     font-weight: 700;
   }}
   .content {{
@@ -93,7 +100,7 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
   }}
   .button {{
     background-color: #4A00E0; /* Consistent purple accent */
-    color: white;
+    color: #FFFFFF !important; /* Ensuring text is white */
     padding: 14px 30px;
     text-decoration: none;
     border-radius: 8px;
@@ -125,6 +132,7 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
 <body>
   <div class="container">
     <div class="header">
+      <div class="brand-name">Buildie</div>
       <h1>🎉 Feature Complete!</h1>
     </div>
     <div class="content">
