@@ -27,6 +27,9 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     safe_project_name = project_name.replace(" ", "%20").replace("/", "%2F")
     post_generation_link = f"{YOUR_APP_BASE_URL}/generate-post?project={safe_project_name}&feature={safe_feature_name}"
     
+    # Define potentially problematic CSS properties as separate strings to avoid f-string parsing issues
+    header_brand_name_font_size = "font-size: 20px; /* Slightly smaller */"
+
     # Updated HTML content for a nicer email
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -60,14 +63,14 @@ async def send_feature_completion_email(project_name: str, feature_name: str, re
     padding: 35px 30px;
     text-align: center;
   }}
-  .header .brand-name {
-    font-size: 20px; /* Slightly smaller */
+  .header .brand-name {{
+    {header_brand_name_font_size}
     font-weight: 600; /* Medium weight */
     color: #FFFFFF;
     margin-bottom: 8px;
     letter-spacing: 0.2px;
     opacity: 0.9;
-  }
+  }}
   .header h1 {{
     margin: 0;
     font-size: 28px;
