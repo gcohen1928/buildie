@@ -12,6 +12,8 @@ export default function HomePage() {
                     bg-black 
                     bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),rgba(255,255,255,0))]">
       
+
+      
       <header className="mt-12 md:mt-20 mb-10 md:mb-16 text-center w-full max-w-4xl">
         <h1 className="text-4xl md:text-6xl font-bold text-slate-50 mb-4">
           Welcome to{' '}
@@ -20,7 +22,7 @@ export default function HomePage() {
           </span>
         </h1>
         <p className="text-lg md:text-xl text-slate-300 mt-3 max-w-2xl mx-auto">
-          The AI-powered copilot for building in public. Automate updates, generate content, and engage your audience, effortlessly.
+          Autopilot for building in public. Automatically generate content, and post on your socials with 1 click.
         </p>
         <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
             <Button asChild size="lg" className="bg-sky-600 hover:bg-sky-700 text-white px-8 py-3 text-base">
